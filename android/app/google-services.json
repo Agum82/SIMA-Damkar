@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "280884779698",
+    "project_id": "damkargarutapp",
+    "storage_bucket": "damkargarutapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:280884779698:android:19b6b2942f64119088c7ab",
+        "android_client_info": {
+          "package_name": "com.example.kerjapraktek"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCMvAjtyHnfCP7-EC5cawS0KxcUBSodGGk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
