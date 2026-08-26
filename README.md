@@ -48,8 +48,8 @@ Kehadiran sistem ini diharapkan mampu meningkatkan efisiensi birokrasi internal,
 *(Letakkan file gambar UI pada folder `assets/images/` di dalam proyek, lalu sesuaikan nama filenya di bawah ini)*
 
 ### 1. Autentikasi
-![Halaman Login]() 
-![Halaman Register]()
+![Halaman Login](assets/images/login_screen.png) 
+![Halaman Register](assets/images/register_screen.png)
 
 ### 2. Dashboard Berdasarkan Role
 ![Dashboard Admin](assets/images/dashboard_admin.png)
