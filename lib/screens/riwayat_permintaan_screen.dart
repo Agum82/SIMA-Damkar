@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,166 +21,190 @@ class _RiwayatPermintaanScreenState extends State<RiwayatPermintaanScreen> {
     return DateFormat('dd-MM-yyyy HH:mm').format(dateTime);
   }
 
+  // Fungsi universal untuk menampilkan gambar (bisa Base64 atau URL Internet) dengan fitur Zoom
+  Widget _buildImageWidget(String imageUrl, BuildContext context) {
+    if (imageUrl.isEmpty || imageUrl == 'null') {
+      return const SizedBox.shrink(); // Menyembunyikan ruang jika tidak ada foto
+    }
+
+    void tampilkanFotoPenuh(Widget imageWidget) {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              Center(child: InteractiveViewer(child: imageWidget)),
+              Positioned(
+                top: 20,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (imageUrl.startsWith('http')) {
+      return InkWell(
+        onTap: () => tampilkanFotoPenuh(Image.network(imageUrl)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            imageUrl, 
+            width: double.infinity, 
+            height: 100, // Tinggi dibuat ramping
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    } else {
+      try {
+        String cleanBase64 = imageUrl;
+        if (cleanBase64.contains(',')) {
+          cleanBase64 = cleanBase64.split(',').last;
+        }
+        cleanBase64 = cleanBase64.replaceAll(RegExp(r'\s+'), '');
+        
+        int padLength = 4 - (cleanBase64.length % 4);
+        if (padLength > 0 && padLength < 4) {
+           cleanBase64 += '=' * padLength;
+        }
+
+        Uint8List decodedBytes = base64Decode(cleanBase64);
+        
+        return InkWell(
+          onTap: () => tampilkanFotoPenuh(Image.memory(decodedBytes)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              decodedBytes, 
+              width: double.infinity, 
+              height: 100, // Tinggi dibuat ramping
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+            ),
+          ),
+        );
+      } catch (e) {
+        return const SizedBox.shrink();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    String currentUserName = 'UPT / Pos';
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Riwayat')),
+        body: const Center(child: Text('Anda belum login')),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        // PERBAIKAN: Mengaktifkan panah kembali bawaan dan menghapus tombol KEMBALI biru
-        automaticallyImplyLeading: true,
         backgroundColor: Colors.red[800],
         foregroundColor: Colors.white,
-        title: const Text('Riwayat Permintaan & Laporan', style: TextStyle(fontSize: 15)),
+        title: const Text('Riwayat Laporan & Permintaan', style: TextStyle(fontSize: 15)),
         centerTitle: true,
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: user != null 
-            ? FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots() 
-            : null,
-        builder: (context, userSnapshot) {
-          if (userSnapshot.hasData && userSnapshot.data!.exists) {
-            currentUserName = userSnapshot.data!.get('nama') ?? 'UPT / Pos';
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('laporan_kerusakan')
+            .where('userId', isEqualTo: user!.uid)
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('laporan_kerusakan')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
 
-              if (snapshot.hasError) {
-                return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
-              }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('Belum ada riwayat laporan/permintaan.'));
+          }
 
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Center(
+          final daftarRiwayat = snapshot.data!.docs;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: daftarRiwayat.length,
+            itemBuilder: (context, index) {
+              final data = daftarRiwayat[index].data() as Map<String, dynamic>;
+
+              String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
+              int jumlah = data['jumlah'] ?? 0;
+              String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
+              String status = data['status'] ?? 'Menunggu';
+              String tingkatKerusakan = data['tingkatKerusakan'] ?? '';
+              Timestamp? createdAt = data['createdAt'] as Timestamp?;
+              String fotoUrl = data['imageUrl'] ?? ''; // Diambil dan diolah oleh widget
+
+              bool isPermintaan = tingkatKerusakan == 'Pengajuan Baru';
+              Color statusColor = status == 'Disetujui' ? Colors.green : (status == 'Ditolak' ? Colors.red : Colors.orange);
+
+              return Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.history, size: 70, color: Colors.grey[300]),
-                      const SizedBox(height: 10),
-                      const Text('Belum ada riwayat permintaan atau laporan.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                    ],
-                  ),
-                );
-              }
-
-              final daftarRiwayat = snapshot.data!.docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                String namaPelanggan = data['namaPelanggan'] ?? '';
-                return namaPelanggan.toLowerCase() == currentUserName.toLowerCase();
-              }).toList();
-
-              if (daftarRiwayat.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.history, size: 70, color: Colors.grey[300]),
-                      const SizedBox(height: 10),
-                      const Text('Belum ada riwayat dari akun ini.', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                    ],
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16.0),
-                itemCount: daftarRiwayat.length,
-                itemBuilder: (context, index) {
-                  final doc = daftarRiwayat[index];
-                  final data = doc.data() as Map<String, dynamic>;
-
-                  String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
-                  int jumlah = data['jumlah'] ?? 0;
-                  String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-                  String status = data['status'] ?? 'Menunggu';
-                  Timestamp? createdAt = data['createdAt'] as Timestamp?;
-                  String? fotoUrl = data['fotoUrl'];
-
-                  Color statusColor = Colors.orange;
-                  if (status == 'Disetujui') statusColor = Colors.green;
-                  if (status == 'Ditolak') statusColor = Colors.red;
-
-                  return Card(
-                    elevation: 2,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  namaBarang, 
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(namaBarang, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                Text(
+                                  isPermintaan ? 'Permintaan Barang' : 'Laporan Kerusakan ($tingkatKerusakan)',
+                                  style: TextStyle(
+                                    color: isPermintaan ? Colors.blue[700] : Colors.red[700],
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold
+                                  )
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: statusColor),
-                                ),
-                                child: Text(
-                                  status,
-                                  style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text('Jumlah: $jumlah Unit', style: TextStyle(color: Colors.grey[800])),
-                          Text('Keterangan: $keterangan', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                          
-                          // Pembatasan tinggi gambar agar rapi dan tidak terlalu besar
-                          if (fotoUrl != null && fotoUrl.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                height: 140,
-                                width: double.infinity,
-                                child: Image.network(
-                                  fotoUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Center(
-                                    child: Text('Gagal memuat gambar', style: TextStyle(color: Colors.red, fontSize: 12)),
-                                  ),
-                                ),
-                              ),
+                              ],
                             ),
-                          ],
-
-                          const SizedBox(height: 10),
-                          const Divider(height: 1),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.access_time, size: 14, color: Colors.grey),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Waktu: ${_formatWaktu(createdAt)}',
-                                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                              ),
-                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: statusColor),
+                            ),
+                            child: Text(status, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(height: 10),
+                      Text('Jumlah: $jumlah Unit'),
+                      Text('Keterangan: $keterangan', style: TextStyle(color: Colors.grey[700])),
+                      
+                      const SizedBox(height: 10),
+                      // Memanggil widget gambar pintar yang baru
+                      _buildImageWidget(fotoUrl, context), 
+                      
+                      const SizedBox(height: 10),
+                      Text('Dikirim: ${_formatWaktu(createdAt)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                  ),
+                ),
               );
             },
           );

@@ -13,11 +13,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _namaController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  
+  // DEFAULT ROLE diatur ke UPT, bukan Admin
   String _roleTerpilih = 'UPT'; 
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  // Fungsi helper untuk menampilkan dialog pop-up di tengah layar
   void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
     showDialog(
       context: context,
@@ -114,7 +115,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Ikon Profil (Warna Merah)
               Icon(Icons.account_circle, size: 90, color: Colors.red[800]),
               const SizedBox(height: 30),
               
@@ -161,13 +161,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   border: OutlineInputBorder(), 
                   prefixIcon: Icon(Icons.badge)
                 ),
-                items: ['UPT', 'Pos', 'Admin'].map((role) => DropdownMenuItem(value: role, child: Text(role))).toList(),
+                // DIRUBAH: Opsi 'Admin' dihapus dari daftar. Sekarang hanya ada UPT dan Pos.
+                items: ['UPT', 'Pos'].map((role) => DropdownMenuItem(value: role, child: Text(role))).toList(),
                 onChanged: (value) => setState(() => _roleTerpilih = value!),
               ),
               
               const SizedBox(height: 30),
               
-              // Tombol Daftar Sekarang
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
@@ -191,7 +191,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               
               const SizedBox(height: 16),
 
-              // Tombol Kembali berbentuk persegi dengan warna biru
               SizedBox(
                 height: 50,
                 child: ElevatedButton(

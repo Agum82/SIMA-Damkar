@@ -1,10 +1,9 @@
-import 'dart:convert';
-import 'dart:io'; // DITAMBAHKAN: Wajib untuk membaca path file di Android
-import 'dart:typed_data';
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // DITAMBAHKAN: Untuk upload gambar
 
 class PengajuanBarangScreen extends StatefulWidget {
   const PengajuanBarangScreen({super.key});
@@ -17,10 +16,10 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
   final TextEditingController _namaBarangController = TextEditingController();
   final TextEditingController _jumlahController = TextEditingController();
   final TextEditingController _keteranganController = TextEditingController();
-  String _imageBase64 = '';
+  
+  File? _selectedImage; // PERBAIKAN: Menggunakan File asli, bukan Base64
   bool _isLoading = false;
 
-  // PERBAIKAN: Fungsi _pickImage diubah agar bisa membaca file di HP Android
   Future<void> _pickImage() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -28,14 +27,9 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
         allowMultiple: false,
       );
 
-      // Gunakan 'path', bukan 'bytes', karena di Android 'bytes' seringkali null
       if (result != null && result.files.single.path != null) {
-        // Baca file dari lokasi path-nya
-        File file = File(result.files.single.path!);
-        Uint8List fileBytes = await file.readAsBytes();
-        
         setState(() {
-          _imageBase64 = base64Encode(fileBytes);
+          _selectedImage = File(result.files.single.path!);
         });
       }
     } catch (e) {
@@ -43,7 +37,19 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
     }
   }
 
-  // Fungsi helper untuk menampilkan dialog pop-up di tengah layar
+  // PERBAIKAN: Fungsi upload gambar ke Firebase Storage (Sama seperti Lapor Rusak)
+  Future<String?> _uploadImage(File imageFile) async {
+    try {
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+      Reference ref = FirebaseStorage.instance.ref().child('pengajuan_barang/$fileName.jpg');
+      UploadTask uploadTask = ref.putFile(imageFile);
+      TaskSnapshot snapshot = await uploadTask;
+      return await snapshot.ref.getDownloadURL();
+    } catch (e) {
+      return null;
+    }
+  }
+
   void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
     showDialog(
       context: context,
@@ -63,7 +69,7 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Hanya menutup dialog, tetap di halaman pengajuan
+              Navigator.pop(context); 
             },
             child: Text(
               'OK',
@@ -94,34 +100,54 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
 
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      String namaPelanggan = 'UPT / Pos';
-      if (user != null) {
+      if (user == null) throw Exception("Anda belum login!");
+
+      // 1. Cari Nama Pengirim / Fallback ke Email
+      String namaPelanggan = user.email ?? 'Akun Tanpa Email';
+      try {
         DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
         if (userDoc.exists) {
-          namaPelanggan = userDoc.get('nama') ?? 'UPT / Pos';
+           Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
+           if (userData != null) {
+              if (userData.containsKey('nama') && userData['nama'].toString().isNotEmpty) {
+                 namaPelanggan = userData['nama'];
+              } else if (userData.containsKey('name') && userData['name'].toString().isNotEmpty) {
+                 namaPelanggan = userData['name'];
+              } else if (userData.containsKey('username') && userData['username'].toString().isNotEmpty) {
+                 namaPelanggan = userData['username'];
+              }
+           }
         }
+      } catch (e) {}
+
+      // 2. Upload Gambar jika ada
+      String? fotoUrl;
+      if (_selectedImage != null) {
+        fotoUrl = await _uploadImage(_selectedImage!);
       }
 
+      // 3. Simpan ke database (Sengaja tetap di laporan_kerusakan sesuai desain asli Anda)
       await FirebaseFirestore.instance.collection('laporan_kerusakan').add({
         'namaBarang': _namaBarangController.text.trim(),
         'jumlah': jumlah,
-        'tingkatKerusakan': 'Pengajuan Baru',
+        'tingkatKerusakan': 'Pengajuan Baru', // Ini tanda bahwa ini adalah Permintaan
         'keterangan': _keteranganController.text.trim().isEmpty ? 'Tidak ada keterangan' : _keteranganController.text.trim(),
-        'imageUrl': _imageBase64, // Menyimpan base64 gambar
+        'imageUrl': fotoUrl ?? '', // Format URL Firebase
         'status': 'Menunggu',
         'namaPelanggan': namaPelanggan,
+        'userId': user.uid, // KUNCI UTAMA: Agar muncul di Riwayat!
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
       _tampilkanDialog('Pengajuan barang berhasil dikirim!', isBerhasil: true);
 
-      // Kosongkan kembali form input agar siap digunakan kembali tanpa keluar halaman
+      // Kosongkan form
       _namaBarangController.clear();
       _jumlahController.clear();
       _keteranganController.clear();
       setState(() {
-        _imageBase64 = '';
+        _selectedImage = null;
       });
 
     } catch (e) {
@@ -158,10 +184,10 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey[400]!),
                   ),
-                  child: _imageBase64.isEmpty
-                      ? Column(
+                  child: _selectedImage == null
+                      ? const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
+                          children: [
                             Icon(Icons.camera_alt, size: 40, color: Colors.grey),
                             SizedBox(height: 6),
                             Text('Foto Barang', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -169,17 +195,11 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
                         )
                       : ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          // PERBAIKAN: Menambahkan errorBuilder agar tahu jika konversi gagal
-                          child: Image.memory(
-                            base64Decode(_imageBase64),
+                          child: Image.file(
+                            _selectedImage!,
                             fit: BoxFit.cover,
                             height: 120,
                             width: 120,
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.broken_image,
-                              color: Colors.red,
-                              size: 40,
-                            ),
                           ),
                         ),
                 ),
@@ -216,7 +236,6 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
             ),
             const SizedBox(height: 30),
             
-            // Tombol Kirim Pengajuan
             SizedBox(
               height: 50,
               child: ElevatedButton(
@@ -238,7 +257,6 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
             
             const SizedBox(height: 15),
             
-            // Tombol KEMBALI di bagian bawah
             SizedBox(
               height: 50,
               child: ElevatedButton(
@@ -247,7 +265,7 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: () => Navigator.pop(context), // Tombol Kembali ke Dashboard
+                onPressed: () => Navigator.pop(context), 
                 child: const Text('KEMBALI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),

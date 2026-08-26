@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'edit_barang_screen.dart';
 
 class GudangBarangScreen extends StatefulWidget {
   const GudangBarangScreen({super.key});
@@ -11,319 +11,314 @@ class GudangBarangScreen extends StatefulWidget {
 }
 
 class _GudangBarangScreenState extends State<GudangBarangScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = "";
-  final Set<String> _selectedIds = {}; // Menyimpan ID barang yang dicentang untuk hapus banyak
+  String _searchQuery = '';
+  final Set<String> _selectedDocIds = {};
   bool _isSelectionMode = false;
 
-  // Helper untuk merender gambar dari string Base64
-  Widget _buildBase64Image(String base64String) {
-    if (base64String.isEmpty) {
-      return Container(
-        height: 140,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: const Center(
-          child: Text('Tidak ada foto prasarana', style: TextStyle(color: Colors.grey, fontSize: 12)),
-        ),
-      );
-    }
-
-    try {
-      Uint8List decodedBytes = base64Decode(base64String);
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.memory(
-          decodedBytes,
-          height: 140,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
-            height: 140,
-            width: double.infinity,
-            color: Colors.grey[200],
-            child: const Icon(Icons.broken_image, size: 40, color: Colors.grey),
-          ),
-        ),
-      );
-    } catch (e) {
-      return Container(
-        height: 140,
-        width: double.infinity,
-        color: Colors.grey[200],
-        child: const Icon(Icons.broken_image, size: 40, color: Colors.grey),
-      );
-    }
+  void _toggleSelectAll(List<QueryDocumentSnapshot> currentDocs) {
+    setState(() {
+      if (_selectedDocIds.length == currentDocs.length) {
+        _selectedDocIds.clear();
+        _isSelectionMode = false;
+      } else {
+        for (var doc in currentDocs) {
+          _selectedDocIds.add(doc.id);
+        }
+        _isSelectionMode = true;
+      }
+    });
   }
 
-  // Fungsi untuk menampilkan Dialog Edit / Update Data Barang
-  void _tampilkanFormEdit(BuildContext context, String docId, Map<String, dynamic> currentData) {
-    final TextEditingController namaController = TextEditingController(text: currentData['nama'] ?? '');
-    final TextEditingController kategoriController = TextEditingController(text: currentData['kategori'] ?? '');
-    final TextEditingController jumlahController = TextEditingController(text: currentData['jumlah']?.toString() ?? '0');
-    final TextEditingController statusController = TextEditingController(text: currentData['status'] ?? 'Baik');
-
+  void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text('Edit / Update Barang Gudang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: namaController,
-                  decoration: const InputDecoration(labelText: 'Nama Barang', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: kategoriController,
-                  decoration: const InputDecoration(labelText: 'Kategori', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: jumlahController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Jumlah Stok', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: statusController,
-                  decoration: const InputDecoration(labelText: 'Status (Contoh: Baik / Perlu Perawatan)', border: OutlineInputBorder()),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white),
-              onPressed: () async {
-                try {
-                  await FirebaseFirestore.instance.collection('gudang_barang').doc(docId).update({
-                    'nama': namaController.text.trim(),
-                    'kategori': kategoriController.text.trim(),
-                    'jumlah': int.tryParse(jumlahController.text.trim()) ?? 0,
-                    'status': statusController.text.trim(),
-                  });
-
-                  if (!context.mounted) return;
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Data barang berhasil diperbarui!'), backgroundColor: Colors.green),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Gagal memperbarui: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              },
-              child: const Text('Simpan Perubahan'),
-            ),
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            Icon(isBerhasil ? Icons.check_circle : Icons.error, color: isBerhasil ? Colors.green : Colors.red[800]),
+            const SizedBox(width: 8),
+            Text(isBerhasil ? 'Berhasil' : 'Peringatan', style: const TextStyle(fontSize: 16)),
           ],
-        );
-      },
+        ),
+        content: Text(pesan, style: const TextStyle(fontSize: 14)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+        ],
+      ),
     );
   }
 
-  // Fungsi untuk menghapus banyak barang sekaligus
-  Future<void> _deleteSelected() async {
-    bool confirm = await showDialog(
+  void _konfirmasiHapusTerpilih() {
+    if (_selectedDocIds.isEmpty) return;
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi Hapus'),
-        content: Text('Yakin ingin menghapus ${_selectedIds.length} barang terpilih?'),
+        title: const Text('Hapus Barang', style: TextStyle(fontSize: 16)),
+        content: Text('Hapus ${_selectedDocIds.length} barang terpilih?', style: const TextStyle(fontSize: 14)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context);
+              WriteBatch batch = FirebaseFirestore.instance.batch();
+              for (String docId in _selectedDocIds) {
+                batch.delete(FirebaseFirestore.instance.collection('gudang_barang').doc(docId));
+              }
+              await batch.commit();
+              setState(() { _selectedDocIds.clear(); _isSelectionMode = false; });
+            },
+            child: const Text('Hapus'),
+          ),
         ],
       ),
-    ) ?? false;
+    );
+  }
 
-    if (confirm) {
-      for (String id in _selectedIds) {
-        await FirebaseFirestore.instance.collection('gudang_barang').doc(id).delete();
+  void _tampilkanDetailBarang(String docId, Map<String, dynamic> data) {
+    String imageUrl = data['imageUrl'] ?? '';
+    
+    List<Widget> detailWidgets = [
+      _buildDetailRow('Nama Barang', data['nama']?.toString() ?? '-'),
+      const Divider(height: 12),
+      _buildDetailRow('Kategori', data['kategori']?.toString() ?? '-'),
+      const Divider(height: 12),
+      _buildDetailRow('Jumlah Stok', '${data['jumlah'] ?? 0} Unit'),
+      const Divider(height: 12),
+      _buildDetailRow('Status', data['status']?.toString() ?? '-'),
+      const Divider(height: 12),
+    ];
+
+    List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'status', 'imageUrl', 'createdAt', 'updatedAt', 'detail'];
+    bool hasExtraDetails = false;
+
+    data.forEach((key, value) {
+      if (!excludeKeys.contains(key) && value != null && value.toString().isNotEmpty && value.toString() != '-') {
+        if (!hasExtraDetails) {
+          detailWidgets.add(const SizedBox(height: 6));
+          detailWidgets.add(const Text('Detail / Penempatan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)));
+          detailWidgets.add(const SizedBox(height: 4));
+          hasExtraDetails = true;
+        }
+        
+        String formattedKey = key[0].toUpperCase() + key.substring(1);
+        detailWidgets.add(_buildDetailRow(formattedKey, value.toString()));
+        detailWidgets.add(const Divider(thickness: 0.5, height: 10));
       }
-      setState(() {
-        _selectedIds.clear();
-        _isSelectionMode = false;
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Barang terpilih berhasil dihapus!'), backgroundColor: Colors.green),
+    });
+
+    if (imageUrl.isNotEmpty) {
+      detailWidgets.add(const SizedBox(height: 8));
+      detailWidgets.add(const Text('Foto Prasarana:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)));
+      detailWidgets.add(const SizedBox(height: 4));
+      detailWidgets.add(
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: imageUrl.startsWith('http')
+              ? Image.network(imageUrl, height: 140, width: double.infinity, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Text('Gagal memuat gambar'))
+              : Image.memory(base64Decode(imageUrl), height: 140, width: double.infinity, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Text('Gagal memuat gambar')),
+        ),
       );
     }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.blueAccent, size: 22),
+            const SizedBox(width: 8),
+            const Text('Detail Barang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: MediaQuery.of(context).size.width * 0.85,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: detailWidgets,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => EditBarangScreen(docId: docId, dataLama: data, barangData: {})));
+            },
+            icon: const Icon(Icons.edit, size: 16),
+            label: const Text('Edit'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12.5))),
+          const Text(': ', style: TextStyle(fontSize: 12.5)),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5))),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: _isSelectionMode 
-            ? Text('${_selectedIds.length} barang dipilih', style: const TextStyle(fontSize: 16)) 
-            : const Text('Gudang Barang Prasarana'),
-        backgroundColor: Colors.red[800],
-        foregroundColor: Colors.white,
-        actions: [
-          if (_isSelectionMode)
-            IconButton(
-              icon: const Icon(Icons.delete),
-              tooltip: 'Hapus Terpilih',
-              onPressed: _deleteSelected,
-            ),
-          if (_isSelectionMode)
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => setState(() {
-                _isSelectionMode = false;
-                _selectedIds.clear();
-              }),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Kolom Pencarian
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            color: Colors.white,
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Cari nama barang prasarana...',
-                prefixIcon: const Icon(Icons.search, color: Colors.red),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-              onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
-            ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('gudang_barang').orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        List<QueryDocumentSnapshot> docs = [];
+        if (snapshot.hasData) {
+          docs = snapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final nama = (data['nama'] ?? '').toString().toLowerCase();
+            final merk = (data['Merk / Tipe'] ?? '').toString().toLowerCase();
+            final nopol = (data['Nomor Kendaraan'] ?? '').toString().toLowerCase();
+            return nama.contains(_searchQuery) || merk.contains(_searchQuery) || nopol.contains(_searchQuery);
+          }).toList();
+        }
+
+        return Scaffold(
+          backgroundColor: Colors.grey[100],
+          appBar: AppBar(
+            title: Text(_isSelectionMode ? '${_selectedDocIds.length} dipilih' : 'Gudang Barang Prasarana', style: const TextStyle(fontSize: 15)),
+            centerTitle: true,
+            backgroundColor: Colors.red[800],
+            foregroundColor: Colors.white,
+            elevation: 1,
+            leading: _isSelectionMode ? IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() { _selectedDocIds.clear(); _isSelectionMode = false; })) : null,
+            actions: [
+              if (_isSelectionMode) ...[
+                IconButton(
+                  icon: Icon(_selectedDocIds.length == docs.length && docs.isNotEmpty ? Icons.deselect : Icons.select_all, size: 20),
+                  onPressed: () => _toggleSelectAll(docs),
+                ),
+                IconButton(icon: const Icon(Icons.delete, size: 20), onPressed: _konfirmasiHapusTerpilih),
+              ]
+            ],
           ),
-          
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('gudang_barang').snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text('Belum ada data barang di gudang.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                  );
-                }
-
-                // Filter data berdasarkan input pencarian
-                var docs = snapshot.data!.docs.where((doc) {
-                  var data = doc.data() as Map<String, dynamic>;
-                  String nama = data['nama']?.toString().toLowerCase() ?? '';
-                  return nama.contains(_searchQuery);
-                }).toList();
-
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('Barang tidak ditemukan.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+          body: Column(
+            children: [
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: TextField(
+                  onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
+                  style: const TextStyle(fontSize: 13.5),
+                  decoration: InputDecoration(
+                    hintText: 'Cari nama barang / nomor kendaraan...',
+                    hintStyle: const TextStyle(fontSize: 12.5),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  // PADDING BAWAH 80 DISET DI SINI AGAR TIDAK TERTUTUP TOMBOL NAVIGASI BAWAH HP
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 80),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    var doc = docs[index];
-                    var data = doc.data() as Map<String, dynamic>;
-
-                    String nama = data['nama'] ?? 'Tanpa Nama';
+                    final doc = docs[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    String docId = doc.id;
+                    bool isSelected = _selectedDocIds.contains(docId);
+                    String imageUrl = data['imageUrl'] ?? '';
                     String kategori = data['kategori'] ?? 'Lainnya';
-                    String jumlah = data['jumlah']?.toString() ?? '0';
-                    String status = data['status'] ?? 'Baik';
-                    String base64Image = data['imageUrl'] ?? '';
-                    bool isSelected = _selectedIds.contains(doc.id);
+                    String namaAsli = data['nama'] ?? 'Tanpa Nama';
+                    
+                    // MENYUSUN NAMA KENDARAAN AGAR LEBIH SPESIFIK DI KARTU
+                    String displayNama = namaAsli;
+                    if (kategori == 'Kendaraan') {
+                      String merk = data['Merk / Tipe'] ?? '';
+                      String nopol = data['Nomor Kendaraan'] ?? '';
+                      if (merk != '-' && merk.isNotEmpty) {
+                        displayNama = '$namaAsli ($merk)';
+                      }
+                      if (nopol != '-' && nopol.isNotEmpty) {
+                        displayNama += ' - $nopol';
+                      }
+                    }
 
                     return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 16),
+                      key: ValueKey(docId),
+                      elevation: 1,
+                      color: isSelected ? Colors.red[50] : Colors.white,
+                      margin: const EdgeInsets.only(bottom: 8),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: isSelected ? Colors.red : Colors.transparent, width: 2),
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: isSelected ? Colors.red : Colors.grey.shade300, width: isSelected ? 1.5 : 0.8),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                // Checkbox untuk mode pilihan banyak (multi-select)
-                                Checkbox(
-                                  value: isSelected,
-                                  activeColor: Colors.red[800],
-                                  onChanged: (val) {
-                                    setState(() {
-                                      if (val!) {
-                                        _selectedIds.add(doc.id);
-                                        _isSelectionMode = true;
-                                      } else {
-                                        _selectedIds.remove(doc.id);
-                                        if (_selectedIds.isEmpty) _isSelectionMode = false;
-                                      }
-                                    });
-                                  },
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    nama,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      child: InkWell(
+                        onTap: () {
+                          if (_isSelectionMode) {
+                            setState(() { isSelected ? _selectedDocIds.remove(docId) : _selectedDocIds.add(docId); if (_selectedDocIds.isEmpty) _isSelectionMode = false; });
+                          } else {
+                            _tampilkanDetailBarang(docId, data);
+                          }
+                        },
+                        onLongPress: () => setState(() { _isSelectionMode = true; _selectedDocIds.add(docId); }),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10.0),
+                          child: Row(
+                            children: [
+                              _isSelectionMode 
+                                ? Checkbox(value: isSelected, activeColor: Colors.red[800], onChanged: (v) => setState(() { v == true ? _selectedDocIds.add(docId) : _selectedDocIds.remove(docId); if(_selectedDocIds.isEmpty) _isSelectionMode = false; }))
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(6), 
+                                    child: Container(
+                                      height: 40, 
+                                      width: 40, 
+                                      color: Colors.grey[200], 
+                                      child: imageUrl.isNotEmpty 
+                                          ? (imageUrl.startsWith('http') ? Image.network(imageUrl, fit: BoxFit.cover) : Image.memory(base64Decode(imageUrl), fit: BoxFit.cover)) 
+                                          : const Icon(Icons.inventory, color: Colors.blueAccent, size: 20)
+                                    ),
                                   ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayNama, 
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text('Kategori: $kategori', style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+                                    const SizedBox(height: 1),
+                                    Text('Jumlah Stok: ${data['jumlah'] ?? 0} Unit', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.blueAccent, fontSize: 11)),
+                                  ],
                                 ),
-                                // Tombol Edit / Update
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                  tooltip: 'Edit Barang',
-                                  onPressed: () => _tampilkanFormEdit(context, doc.id, data),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-
-                            // Informasi Detail Stok & Kategori
-                            Padding(
-                              padding: const EdgeInsets.only(left: 12.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Kategori: $kategori', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                                  Text('Jumlah Stok: $jumlah Unit', style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.w500)),
-                                  Text('Status: $status', style: TextStyle(color: status == 'Baik' ? Colors.green : Colors.orange, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ],
                               ),
-                            ),
-                            
-                            const SizedBox(height: 12),
-                            
-                            // Tampilan Gambar Barang (Base64)
-                            _buildBase64Image(base64Image),
-                          ],
+                              if (!_isSelectionMode) const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                            ],
+                          ),
                         ),
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

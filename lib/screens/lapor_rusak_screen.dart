@@ -1,8 +1,9 @@
-import 'dart:io';
+import 'dart:convert'; // Untuk Base64
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
 
 class LaporRusakScreen extends StatefulWidget {
   const LaporRusakScreen({super.key});
@@ -16,30 +17,20 @@ class _LaporRusakScreenState extends State<LaporRusakScreen> {
   final TextEditingController _jumlahController = TextEditingController();
   final TextEditingController _keteranganController = TextEditingController();
   
-  // Default pilihan diubah menjadi Kerusakan Sedang karena Ringan sudah dihapus
-  String _tingkatKerusakan = 'Kerusakan Sedang';
-  File? _selectedImage;
+  String _tingkatKerusakan = 'Sedang'; 
+  Uint8List? _imageBytes; 
   bool _isLoading = false;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    // Resolusi dikompres agar ukuran Base64 tidak terlalu besar untuk Firestore
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 60, maxWidth: 800, maxHeight: 800);
+    
     if (pickedFile != null) {
+      Uint8List bytes = await pickedFile.readAsBytes();
       setState(() {
-        _selectedImage = File(pickedFile.path);
+        _imageBytes = bytes;
       });
-    }
-  }
-
-  Future<String?> _uploadImage(File imageFile) async {
-    try {
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference ref = FirebaseStorage.instance.ref().child('laporan_kerusakan/$fileName.jpg');
-      UploadTask uploadTask = ref.putFile(imageFile);
-      TaskSnapshot snapshot = await uploadTask;
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      return null;
     }
   }
 
@@ -52,24 +43,50 @@ class _LaporRusakScreenState extends State<LaporRusakScreen> {
     setState(() => _isLoading = true);
 
     try {
-      String? fotoUrl;
-      if (_selectedImage != null) {
-        fotoUrl = await _uploadImage(_selectedImage!);
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("Anda belum login!");
+
+      String namaPelanggan = user.email ?? 'Akun Tanpa Email';
+      
+      try {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (userDoc.exists) {
+           Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
+           if (userData != null) {
+              if (userData.containsKey('nama') && userData['nama'].toString().isNotEmpty) {
+                 namaPelanggan = userData['nama'];
+              } else if (userData.containsKey('name') && userData['name'].toString().isNotEmpty) {
+                 namaPelanggan = userData['name'];
+              } else if (userData.containsKey('username') && userData['username'].toString().isNotEmpty) {
+                 namaPelanggan = userData['username'];
+              }
+           }
+        }
+      } catch (e) {
+        // Abaikan
       }
 
+      // 1. MENGUBAH GAMBAR JADI BASE64 (Sama seperti halaman Edit Barang)
+      String fotoBase64 = '';
+      if (_imageBytes != null) {
+        fotoBase64 = base64Encode(_imageBytes!);
+      }
+
+      // 2. SIMPAN LANGSUNG KE FIRESTORE (Tanpa Firebase Storage)
       await FirebaseFirestore.instance.collection('laporan_kerusakan').add({
         'namaBarang': _namaBarangController.text.trim(),
         'tingkatKerusakan': _tingkatKerusakan,
         'jumlah': int.tryParse(_jumlahController.text.trim()) ?? 0,
         'keterangan': _keteranganController.text.trim(),
-        'fotoUrl': fotoUrl ?? '',
+        'imageUrl': fotoBase64, // Disimpan sebagai Base64
         'status': 'Menunggu',
-        'createdAt': Timestamp.now(),
+        'namaPelanggan': namaPelanggan, 
+        'userId': user.uid,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
 
-      // Dialog sukses konfirmasi sebelum kembali ke dashboard
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -86,8 +103,8 @@ class _LaporRusakScreenState extends State<LaporRusakScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context); // Tutup dialog
-                Navigator.pop(context); // Kembali ke halaman sebelumnya secara mulus
+                Navigator.pop(context); 
+                Navigator.pop(context); 
               },
               child: const Text('OK', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
             ),
@@ -151,10 +168,10 @@ class _LaporRusakScreenState extends State<LaporRusakScreen> {
                     borderRadius: BorderRadius.circular(12),
                     color: Colors.grey[100],
                   ),
-                  child: _selectedImage != null
+                  child: _imageBytes != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_selectedImage!, fit: BoxFit.cover),
+                          child: Image.memory(_imageBytes!, fit: BoxFit.cover),
                         )
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -168,82 +185,46 @@ class _LaporRusakScreenState extends State<LaporRusakScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
             TextField(
               controller: _namaBarangController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Barang',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.inventory_2),
-              ),
+              decoration: const InputDecoration(labelText: 'Nama Barang', border: OutlineInputBorder(), prefixIcon: Icon(Icons.inventory_2)),
             ),
             const SizedBox(height: 15),
-
             DropdownButtonFormField<String>(
               value: _tingkatKerusakan,
-              decoration: const InputDecoration(
-                labelText: 'Tingkat Kerusakan',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.warning_amber),
-              ),
+              decoration: const InputDecoration(labelText: 'Tingkat Kerusakan', border: OutlineInputBorder(), prefixIcon: Icon(Icons.warning_amber)),
               items: const [
-                // PERBAIKAN: "Kerusakan Ringan" sudah dihapus dari sini
-                DropdownMenuItem(value: 'Kerusakan Sedang', child: Text('Kerusakan Sedang')),
-                DropdownMenuItem(value: 'Kerusakan Berat', child: Text('Kerusakan Berat')),
+                DropdownMenuItem(value: 'Sedang', child: Text('Kerusakan Sedang')),
+                DropdownMenuItem(value: 'Berat', child: Text('Kerusakan Berat')),
               ],
               onChanged: (value) => setState(() => _tingkatKerusakan = value!),
             ),
             const SizedBox(height: 15),
-
             TextField(
               controller: _jumlahController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Jumlah Unit',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.format_list_numbered),
-              ),
+              decoration: const InputDecoration(labelText: 'Jumlah Unit', border: OutlineInputBorder(), prefixIcon: Icon(Icons.format_list_numbered)),
             ),
             const SizedBox(height: 15),
-
             TextField(
               controller: _keteranganController,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Keterangan Kerusakan',
-                border: OutlineInputBorder(),
-                alignLabelWithHint: true,
-              ),
+              decoration: const InputDecoration(labelText: 'Keterangan Kerusakan', border: OutlineInputBorder(), alignLabelWithHint: true),
             ),
             const SizedBox(height: 25),
-
-            // Tombol Kirim Laporan
             SizedBox(
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[800],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 onPressed: _isLoading ? null : _kirimLaporan,
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Kirim Laporan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Kirim Laporan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
-            
             const SizedBox(height: 12),
-
-            // Tombol KEMBALI
             SizedBox(
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[700], 
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 onPressed: () => Navigator.pop(context),
                 child: const Text('KEMBALI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),

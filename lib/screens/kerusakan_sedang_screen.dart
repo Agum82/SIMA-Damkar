@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class KerusakanSedangScreen extends StatefulWidget {
   const KerusakanSedangScreen({super.key});
@@ -11,7 +12,12 @@ class KerusakanSedangScreen extends StatefulWidget {
 }
 
 class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
-  // Fungsi helper untuk menampilkan dialog pop-up di tengah layar
+  
+  String _formatWaktu(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    return DateFormat('dd-MM-yyyy HH:mm').format(timestamp.toDate());
+  }
+
   void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
     showDialog(
       context: context,
@@ -58,48 +64,80 @@ class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
     }
   }
 
-  Widget _buildBase64Image(String base64String) {
-    if (base64String.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey[50],
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: const Text(
-          'Tidak ada foto dilampirkan', 
-          textAlign: TextAlign.center, 
-          style: TextStyle(color: Colors.grey),
+  // FUNGSI YANG DIPERBARUI: Lebih ramping, hemat tempat, dan bisa di-klik untuk Zoom
+  Widget _buildImageWidget(String imageUrl) {
+    if (imageUrl.isEmpty || imageUrl == 'null') {
+      return const SizedBox.shrink(); // Menyembunyikan ruang kosong jika tidak ada foto
+    }
+
+    void tampilkanFotoPenuh(Widget imageWidget) {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              Center(child: InteractiveViewer(child: imageWidget)),
+              Positioned(
+                top: 20,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    try {
-      Uint8List decodedBytes = base64Decode(base64String);
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.memory(
-          decodedBytes,
-          width: double.infinity,
-          height: 180,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
-            height: 180,
-            width: double.infinity,
-            color: Colors.grey[200],
-            child: const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+    if (imageUrl.startsWith('http')) {
+      return InkWell(
+        onTap: () => tampilkanFotoPenuh(Image.network(imageUrl)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            imageUrl, 
+            width: double.infinity, 
+            height: 100, // Tinggi diperkecil
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
           ),
         ),
       );
-    } catch (e) {
-      return Container(
-        height: 180,
-        width: double.infinity,
-        color: Colors.grey[200],
-        child: const Icon(Icons.broken_image, size: 50, color: Colors.grey),
-      );
+    } else {
+      try {
+        String cleanBase64 = imageUrl;
+        if (cleanBase64.contains(',')) {
+          cleanBase64 = cleanBase64.split(',').last;
+        }
+        cleanBase64 = cleanBase64.replaceAll(RegExp(r'\s+'), '');
+        
+        int padLength = 4 - (cleanBase64.length % 4);
+        if (padLength > 0 && padLength < 4) {
+           cleanBase64 += '=' * padLength;
+        }
+
+        Uint8List decodedBytes = base64Decode(cleanBase64);
+        
+        return InkWell(
+          onTap: () => tampilkanFotoPenuh(Image.memory(decodedBytes)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              decodedBytes, 
+              width: double.infinity, 
+              height: 100, // Tinggi diperkecil
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+            ),
+          ),
+        );
+      } catch (e) {
+        return const SizedBox.shrink();
+      }
     }
   }
 
@@ -112,7 +150,6 @@ class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
         foregroundColor: Colors.white,
         title: const Text('Data Kerusakan Sedang', style: TextStyle(fontSize: 16)),
         centerTitle: true,
-        // Memunculkan tanda panah di kiri atas untuk kembali
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -145,7 +182,6 @@ class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
             );
           }
 
-          // Filter secara lokal: Hanya tampilkan yang statusnya 'Menunggu'
           final daftarRusakSedang = snapshot.data!.docs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
             String status = data['status'] ?? 'Menunggu';
@@ -175,9 +211,10 @@ class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
               String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
               String jumlah = data['jumlah']?.toString() ?? '0';
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-              String base64Image = data['imageUrl'] ?? ''; 
+              String imageUrl = data['imageUrl'] ?? ''; 
               String status = data['status'] ?? 'Menunggu'; 
               String namaPelanggan = data['namaPelanggan'] ?? 'UPT / Pos Tidak Diketahui';
+              Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
               return Card(
                 elevation: 2,
@@ -202,11 +239,9 @@ class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
                               children: [
                                 Text(namaBarang, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                 const SizedBox(height: 4),
-                                
                                 Text('Dari: $namaPelanggan', 
                                      style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13)),
                                 const SizedBox(height: 2),
-
                                 Text('Jumlah: $jumlah Unit', style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.w500)),
                                 Text('Keterangan: $keterangan', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                               ],
@@ -226,11 +261,22 @@ class _KerusakanSedangScreenState extends State<KerusakanSedangScreen> {
                         ],
                       ),
                       
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Dikirim: ${_formatWaktu(createdAt)}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+
                       const SizedBox(height: 16),
-                      _buildBase64Image(base64Image),
+                      _buildImageWidget(imageUrl), 
                       const SizedBox(height: 16),
                       
-                      // Tombol Aksi (Setujui / Tolak)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [

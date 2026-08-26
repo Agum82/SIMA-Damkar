@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Ditambahkan untuk TextInput.finishAutofillContext()
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'upt_dashboard_screen.dart';
-import 'admin_dashboard_screen.dart'; // Import halaman dashboard admin
+import 'admin_dashboard_screen.dart'; 
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -72,6 +73,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    // Beri sinyal ke OS bahwa proses input selesai (memicu pop-up simpan sandi)
+    TextInput.finishAutofillContext(); 
+
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
 
@@ -100,7 +104,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (userDoc.exists) {
         String role = userDoc.get('role') ?? 'UPT';
 
-        // Navigasi langsung menggunakan MaterialPageRoute tanpa rute nama
         if (role == 'Admin') {
           Navigator.pushReplacement(
             context,
@@ -146,57 +149,67 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.local_fire_department, size: 80, color: Colors.red[600]),
-              const SizedBox(height: 20),
-              const Text('Sistem Operasional Sapras', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const Text('Dinas Pemadam Kebakaran Kab. Garut', style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 40),
+          child: AutofillGroup( // 1. MENGGUNAKAN AutofillGroup
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.local_fire_department, size: 80, color: Colors.red[600]),
+                const SizedBox(height: 20),
+                const Text('Sistem Operasional Sapras', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const Text('Dinas Pemadam Kebakaran Kab. Garut', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 40),
 
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email)),
-              ),
-              const SizedBox(height: 15),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email], // 2. HINT UNTUK EMAIL
+                  decoration: const InputDecoration(
+                    labelText: 'Email', 
+                    border: OutlineInputBorder(), 
+                    prefixIcon: Icon(Icons.email)
                   ),
                 ),
-              ),
-              const SizedBox(height: 25),
+                const SizedBox(height: 15),
 
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white),
-                  onPressed: _isLoading ? null : _login,
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold)),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  autofillHints: const [AutofillHints.password], // 3. HINT UNTUK PASSWORD
+                  onEditingComplete: () => _login(), // Tekan Enter di keyboard langsung login
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 15),
+                const SizedBox(height: 25),
 
-              TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white),
+                    onPressed: _isLoading ? null : _login,
+                    child: _isLoading 
+                      ? const CircularProgressIndicator(color: Colors.white) 
+                      : const Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
                 ),
-                child: const Text('Belum punya akun? Daftar di sini', style: TextStyle(color: Colors.red)),
-              ),
-            ],
+                const SizedBox(height: 15),
+
+                TextButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                  ),
+                  child: const Text('Belum punya akun? Daftar di sini', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
           ),
         ),
       ),

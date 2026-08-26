@@ -1,14 +1,14 @@
-import 'dart:convert'; // Untuk base64Encode & base64Decode
+import 'dart:convert'; 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EditBarangScreen extends StatefulWidget {
-  final String docId; // Menerima ID dari Firestore
-  final Map<String, dynamic> dataLama; // Menerima data lama
+  final String docId; 
+  final Map<String, dynamic> dataLama; 
 
-  const EditBarangScreen({super.key, required this.docId, required this.dataLama});
+  const EditBarangScreen({super.key, required this.docId, required this.dataLama, required Map<String, dynamic> barangData});
 
   @override
   State<EditBarangScreen> createState() => _EditBarangScreenState();
@@ -19,8 +19,11 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
   late TextEditingController _jumlahController;
   late String _kategoriTerpilih;
   
+  // DITAMBAHKAN: Map untuk menampung controller dari setiap inputan Pos secara dinamis
+  final Map<String, TextEditingController> _posControllers = {};
+  
   String _imageUrlLama = '';
-  Uint8List? _imageBytes; // Menggunakan bytes agar kompatibel di Web dan Mobile
+  Uint8List? _imageBytes; 
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false; 
 
@@ -35,6 +38,13 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
     _kategoriTerpilih = validKategori.contains(kategoriDariDB) ? kategoriDariDB : 'Lainnya';
     
     _imageUrlLama = widget.dataLama['imageUrl'] ?? '';
+
+    // DITAMBAHKAN: Deteksi otomatis semua field yang berawalan "Pos " dan buatkan Controllernya
+    widget.dataLama.forEach((key, value) {
+      if (key.startsWith('Pos ')) {
+        _posControllers[key] = TextEditingController(text: value.toString());
+      }
+    });
   }
 
   Future<void> _pilihGambar(ImageSource source) async {
@@ -79,18 +89,30 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
     try {
       String finalImageBase64 = _imageUrlLama;
 
-      // Jika user memilih gambar baru, konversi ke Base64
       if (_imageBytes != null) {
         finalImageBase64 = base64Encode(_imageBytes!);
       }
 
-      // Update data langsung ke Firestore
-      await FirebaseFirestore.instance.collection('gudang_barang').doc(widget.docId).update({
+      // 1. Siapkan data utama yang akan diupdate
+      Map<String, dynamic> dataToUpdate = {
         'nama': _namaBarangController.text.trim(),
         'kategori': _kategoriTerpilih,
         'jumlah': int.tryParse(_jumlahController.text.trim()) ?? 0,
         'imageUrl': finalImageBase64,
+      };
+
+      // 2. DITAMBAHKAN: Masukkan juga semua data Pos yang telah diedit ke dalam map update
+      _posControllers.forEach((key, controller) {
+        if (controller.text.trim().isNotEmpty) {
+          dataToUpdate[key] = controller.text.trim();
+        } else {
+          // Jika inputan dikosongkan oleh admin, hapus field tersebut dari database
+          dataToUpdate[key] = FieldValue.delete();
+        }
       });
+
+      // Update semua data (utama + Pos) sekaligus ke Firestore
+      await FirebaseFirestore.instance.collection('gudang_barang').doc(widget.docId).update(dataToUpdate);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -117,10 +139,13 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
   void dispose() {
     _namaBarangController.dispose();
     _jumlahController.dispose();
+    // DITAMBAHKAN: Bersihkan memori controller Pos
+    for (var controller in _posControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  // Helper untuk menampilkan preview gambar lama (Base64) atau baru
   Widget _buildPreviewImage() {
     if (_imageBytes != null) {
       return Image.memory(_imageBytes!, fit: BoxFit.cover);
@@ -253,11 +278,41 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
               controller: _jumlahController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: 'Jumlah Stok',
+                labelText: 'Jumlah Stok (Total)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.format_list_numbered),
               ),
             ),
+            
+            // DITAMBAHKAN: Merender list form untuk setiap Pos yang ditemukan
+            if (_posControllers.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const Divider(thickness: 1.5),
+              const SizedBox(height: 10),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Detail Penempatan Pos:', 
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87)
+                ),
+              ),
+              const SizedBox(height: 15),
+              
+              ..._posControllers.entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 15.0),
+                  child: TextField(
+                    controller: entry.value,
+                    decoration: InputDecoration(
+                      labelText: entry.key, // Akan otomatis bernama "Pos Mako/BKPP", "Pos Limbangan", dll.
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_city, color: Colors.grey),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
@@ -267,12 +322,14 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red[800],
                   foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
                 ),
                 child: _isLoading 
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('Simpan Perubahan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),

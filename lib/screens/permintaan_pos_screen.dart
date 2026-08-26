@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class PermintaanPosScreen extends StatefulWidget {
   const PermintaanPosScreen({super.key});
@@ -9,7 +12,12 @@ class PermintaanPosScreen extends StatefulWidget {
 }
 
 class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
-  // Fungsi helper untuk menampilkan dialog pop-up di tengah layar
+  
+  String _formatWaktu(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    return DateFormat('dd-MM-yyyy HH:mm').format(timestamp.toDate());
+  }
+
   void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
     showDialog(
       context: context,
@@ -42,10 +50,8 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     );
   }
 
-  // Fungsi untuk memperbarui status permintaan dan mengurangi stok gudang jika disetujui
   Future<void> _updateStatusPermintaan(String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
     try {
-      // 1. Jika disetujui, kurangi stok barang di gudang secara otomatis
       if (statusBaru == 'Disetujui') {
         var gudangQuery = await FirebaseFirestore.instance
             .collection('gudang_barang')
@@ -58,7 +64,6 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
           int stokBaru = stokSekarang - jumlahDiminta;
           if (stokBaru < 0) stokBaru = 0;
 
-          // Update stok di gudang
           await FirebaseFirestore.instance
               .collection('gudang_barang')
               .doc(gudangDoc.id)
@@ -66,7 +71,6 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
         }
       }
 
-      // 2. Update status pada dokumen laporan/permintaan
       await FirebaseFirestore.instance
           .collection('laporan_kerusakan')
           .doc(docId)
@@ -79,6 +83,83 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     }
   }
 
+  // FUNGSI YANG DIPERBARUI: Lebih ramping, hemat tempat, dan bisa di-klik untuk Zoom
+  Widget _buildImageWidget(String imageUrl) {
+    if (imageUrl.isEmpty || imageUrl == 'null') {
+      return const SizedBox.shrink(); // Menyembunyikan ruang kosong jika tidak ada foto
+    }
+
+    void tampilkanFotoPenuh(Widget imageWidget) {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              Center(child: InteractiveViewer(child: imageWidget)),
+              Positioned(
+                top: 20,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (imageUrl.startsWith('http')) {
+      return InkWell(
+        onTap: () => tampilkanFotoPenuh(Image.network(imageUrl)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            imageUrl, 
+            width: double.infinity, 
+            height: 100, // Tinggi diperkecil
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    } else {
+      try {
+        String cleanBase64 = imageUrl;
+        if (cleanBase64.contains(',')) {
+          cleanBase64 = cleanBase64.split(',').last;
+        }
+        cleanBase64 = cleanBase64.replaceAll(RegExp(r'\s+'), '');
+        
+        int padLength = 4 - (cleanBase64.length % 4);
+        if (padLength > 0 && padLength < 4) {
+           cleanBase64 += '=' * padLength;
+        }
+
+        Uint8List decodedBytes = base64Decode(cleanBase64);
+        
+        return InkWell(
+          onTap: () => tampilkanFotoPenuh(Image.memory(decodedBytes)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              decodedBytes, 
+              width: double.infinity, 
+              height: 100, // Tinggi diperkecil
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+            ),
+          ),
+        );
+      } catch (e) {
+        return const SizedBox.shrink();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -88,13 +169,11 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
         foregroundColor: Colors.white,
         title: const Text('Permintaan Masuk dari Pos', style: TextStyle(fontSize: 16)),
         centerTitle: true,
-        // Ini akan memunculkan tanda panah di kiri atas untuk kembali
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      // Mengambil data secara real-time dari Firestore khusus yang statusnya 'Menunggu' dari Pos
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('laporan_kerusakan')
@@ -122,11 +201,12 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
             );
           }
 
-          // Filter data secara lokal untuk memastikan hanya menampilkan dari 'Pos'
           final daftarPermintaanPos = snapshot.data!.docs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
+            String tingkatKerusakan = data['tingkatKerusakan'] ?? '';
             String namaPelanggan = (data['namaPelanggan'] ?? data['role'] ?? '').toString().toLowerCase();
-            return namaPelanggan.contains('pos');
+            
+            return tingkatKerusakan == 'Pengajuan Baru' && namaPelanggan.contains('pos');
           }).toList();
 
           if (daftarPermintaanPos.isEmpty) {
@@ -154,57 +234,86 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
               int jumlah = data['jumlah'] ?? 0;
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
               String imageUrl = data['imageUrl'] ?? '';
+              Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
               return Card(
                 elevation: 2,
-                margin: const EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        namaPelanggan.toUpperCase(), 
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange)
-                      ),
-                      const SizedBox(height: 4),
-                      Text(namaBarang, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text('Jumlah: $jumlah Unit'),
-                      Text('Keterangan: $keterangan'),
-                      
-                      // Tampilkan foto jika ada lampiran
-                      if (imageUrl.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            imageUrl,
-                            height: 150,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const SizedBox(),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const CircleAvatar(
+                            backgroundColor: Colors.orange, 
+                            child: Icon(Icons.assignment_turned_in, color: Colors.white),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(namaBarang, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Dari: $namaPelanggan', 
+                                  style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                const SizedBox(height: 2),
+                                Text('Jumlah: $jumlah Unit', style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.w500)),
+                                Text('Keterangan: $keterangan', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Menunggu',
+                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
                       
                       const SizedBox(height: 12),
                       Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Dikirim: ${_formatWaktu(createdAt)}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+                      _buildImageWidget(imageUrl),
+                      const SizedBox(height: 16),
+                      
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          TextButton(
+                          OutlinedButton.icon(
                             onPressed: () => _updateStatusPermintaan(doc.id, 'Ditolak', namaBarang, jumlah),
-                            child: const Text('Tolak', style: TextStyle(color: Colors.red)),
+                            icon: const Icon(Icons.close, color: Colors.red, size: 18),
+                            label: const Text('Tolak', style: TextStyle(color: Colors.red)),
+                            style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
                             onPressed: () => _updateStatusPermintaan(doc.id, 'Disetujui', namaBarang, jumlah),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green, 
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Setujui'),
+                            icon: const Icon(Icons.check, color: Colors.white, size: 18),
+                            label: const Text('Setujui', style: TextStyle(fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                           ),
                         ],
                       ),
