@@ -6,23 +6,41 @@ Sebuah aplikasi berbasis *mobile* (Android/iOS) yang dibangun menggunakan kerang
 ---
 
 ## 📋 Daftar Isi
-1. [Pengenalan & Fitur Utama](#-pengenalan--fitur-utama)
-2. [Tampilan Aplikasi & Navigasi](#-tampilan-aplikasi--navigasi)
-3. [Struktur File Layar (Screens)](#-struktur-file-layar-screens)
-4. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
-5. [Tata Cara Pembuatan Aplikasi](#-tata-cara-pembuatan-aplikasi)
-6. [Daftar Bug & Solusi](#-daftar-bug--solusi)
-7. [Panduan Build & Instalasi di HP (Android)](#-panduan-build--instalasi-di-hp-android)
+1. [Pengenalan & Latar Belakang Sistem](#-pengenalan--latar-belakang-sistem)
+2. [Fitur Utama Aplikasi](#-fitur-utama-aplikasi)
+3. [Tampilan Aplikasi & Navigasi](#-tampilan-aplikasi--navigasi)
+4. [Struktur File Layar (Screens)](#-struktur-file-layar-screens)
+5. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
+6. [Tata Cara Pembuatan Aplikasi](#-tata-cara-pembuatan-aplikasi)
+7. [Daftar Bug & Cara Menyelesaikannya](#-daftar-bug--cara-menyelesaikannya)
+8. [Panduan Build & Instalasi di HP (Android)](#-panduan-build--instalasi-di-hp-android)
 
 ---
+## 📖 Pengenalan & Latar Belakang Sistem
 
-## 🚀 Pengenalan & Fitur Utama
-Sistem ini membagi pengguna ke dalam tiga peran (*Role*) utama: **Admin, UPT, dan Pos**. 
-* **Autentikasi Aman:** Login multi-peran dengan Firebase Auth (mendukung fitur *Autofill* bawaan OS Android/iOS).
-* **Pelaporan Real-time:** Pos/UPT dapat mengajukan laporan kerusakan (Ringan/Sedang/Berat) dan melampirkan foto bukti (mendukung format Base64 dan URL Internet).
-* **Manajemen Stok Otomatis:** Admin dapat menyetujui atau menolak permintaan. Jika disetujui, sistem otomatis memotong stok barang di *database* gudang pusat.
-* **Riwayat & Pelacakan:** Setiap laporan otomatis masuk ke menu riwayat dengan status yang jelas (Menunggu, Disetujui, Ditolak).
-* **Fitur Zoom Gambar:** Foto bukti laporan dapat diklik untuk diperbesar menggunakan fitur *Interactive Viewer*.
+Dinas Pemadam Kebakaran Kabupaten Garut merupakan lembaga pelayanan publik garda terdepan yang memegang tanggung jawab krusial dalam penanggulangan bahaya kebakaran, penyelamatan (*rescue*), serta mitigasi bencana di wilayah administratif Kabupaten Garut yang luas. Dalam menjalankan tugas operasional sehari-hari, kesiapan dan ketersediaan sarana dan prasarana (Sapras)—mulai dari unit kendaraan operasional, selang pemadam tekanan tinggi, alat pelindung diri (APD), hingga peralatan evakuasi teknis—merupakan faktor penentu utama dalam kecepatan dan keberhasilan respons di lapangan.
+
+Namun, dalam praktiknya, pengelolaan inventaris dan pelaporan kerusakan fasilitas di pos-pos sektor maupun Unit Pelaksana Teknis (UPT) di bawah naungan Dinas Pemadam Kebakaran Kabupaten Garut masih menghadapi berbagai kendala struktural. Beberapa permasalahan utama yang sering dijumpai meliputi:
+
+1. **Proses Pelaporan yang Konvensional:** Pengiriman informasi kerusakan alat atau pengajuan logistik dari pos cabang ke kantor pusat umumnya masih menggunakan metode manual (seperti pesan singkat atau rekapitulasi kertas). Hal ini berisiko tinggi menyebabkan informasi terlambat sampai, tercecer, atau kurang akurat.
+2. **Keterlambatan Rekapitulasi Data Inventaris:** Admin pusat seringkali kesulitan untuk memantau kondisi riil inventaris di setiap pos secara *real-time*. Akibatnya, pengambilan keputusan terkait perbaikan atau pengadaan barang baru kerap mengalami penundaan.
+3. **Risiko Kesalahan Pencatatan (Human Error):** Pengelolaan stok gudang yang belum terdigitalisasi dengan baik meningkatkan potensi selisih data antara fisik barang di gudang dengan catatan pembukuan administratif.
+4. **Kurangnya Transparansi Status Pengajuan:** Petugas di pos atau UPT sering kali harus menunggu tanpa kejelasan terkait status tindak lanjut dari laporan kerusakan yang telah mereka kirimkan, apakah sedang ditinjau, disetujui, atau ditolak oleh pihak pusat.
+
+Berdasarkan berbagai permasalahan tersebut, transformasi digital melalui penerapan sistem informasi berbasis perangkat bergerak (*mobile application*) menjadi suatu kebutuhan yang mendesak (*urgent*). 
+
+Untuk menjawab tantangan ini, dikembangkanlah **SIMA DAmkar (Sistem Informasi Manajemen Sarana dan Prasarana Dinas Pemadam Kebakaran)**. Aplikasi ini dirancang sebagai platform terpadu yang menjembatani komunikasi operasional antara petugas lapangan (Pos dan UPT) dengan manajemen pusat (Admin). Dengan memanfaatkan teknologi *cross-platform* Flutter dan arsitektur *cloud database* berbasis *real-time* (Firebase Cloud Firestore), SIMA DAmkar mampu mendigitalisasi seluruh siklus hidup pelaporan—mulai dari pengiriman laporan kerusakan berlampirkan bukti foto, validasi tingkat keparahan (Ringan, Sedang, Berat), hingga pemotongan stok gudang pusat secara otomatis saat pengajuan disetujui.
+
+Kehadiran sistem ini diharapkan mampu meningkatkan efisiensi birokrasi internal, meminimalisir kesalahan pencatatan logistik, mempercepat waktu tanggap (*response time*) pemeliharaan sarana, serta mewujudkan tata kelola inventaris yang transparan dan akuntabel di lingkungan Dinas Pemadam Kebakaran Kabupaten Garut.
+
+---
+## 🚀 Fitur Utama Aplikasi
+* **Autentikasi Multi-Peran yang Aman:** Menggunakan Firebase Authentication yang terintegrasi langsung dengan penyimpanan data pengguna di Firestore, lengkap dengan dukungan fitur *Autofill* dan *Password Manager* bawaan perangkat untuk kemudahan masuk.
+* **Pelaporan & Pengajuan Real-time:** Memungkinkan petugas lapangan mengirimkan formulir laporan kerusakan atau permintaan barang baru dengan menyertakan bukti visual berupa foto.
+* **Manajemen Gambar Hibrida (Base64 & URL):** Sistem secara cerdas mampu membaca dan merender data gambar baik yang bersumber dari URL Internet maupun string terkompresi berformat *Base64*.
+* **Pengurangan Stok Otomatis:** Ketika Admin menyetujui suatu pengajuan permintaan barang dari pos, sistem secara otomatis menghitung dan memotong jumlah ketersediaan stok di basis data gudang pusat (`gudang_barang`).
+* **Sistem Pelacakan Status & Riwayat:** Setiap laporan memiliki siklus hidup yang transparan, mulai dari status *Menunggu*, hingga berubah menjadi *Disetujui* atau *Ditolak*, yang kemudian diarsipkan secara otomatis ke dalam menu Riwayat pengguna.
+* **Fitur Zoom Interaktif:** Dilengkapi dengan komponen *InteractiveViewer* pada dialog gambar agar pengguna dapat memperbesar foto bukti kerusakan untuk pemeriksaan yang lebih detail.
 
 ---
 
@@ -108,12 +126,7 @@ Selama proses pengerjaan aplikasi, terdapat beberapa kendala teknis yang berhasi
 
 3. **Bug: Pop-up "Simpan Sandi" (Autofill) Tidak Muncul di Halaman Login**
    * **Penyebab:** *TextField* standar Flutter tidak memiliki *bridge* otomatis ke layanan *Password Manager* OS Android/iOS.
-   * **Solusi:** Membungkus *TextField* dengan `AutofillGroup`, mengisi `autofillHints: [AutofillHints.email, AutofillHints.password]`, dan secara eksplisit memanggil `TextInput.finishAutofillContext()` segera setelah aksi *login* divalidasi.
-
-4. **Bug: Galat Server Text-to-Diagram (Draw.io)**
-   * **Penyebab:** Ekstensi *PlantUML* terintegrasi pada Draw.io mengalami penghentian layanan server (*deprecated*), sehingga kode *Activity Diagram* yang dimasukkan selalu mengeluarkan status galat.
-   * **Solusi:** Merancang dan menghubungkan blok *Activity Diagram* sistem SIMA DAmkar secara manual menggunakan palet komponen standar (Oval, Rectangle, Diamond) pada kanvas kerja.
-
+   * **Solusi:** Membungkus *TextField* dengan `AutofillGroup`, mengisi `autofillHints: [AutofillHints.email, AutofillHints.password]`, dan secara eksplisit memanggil `TextInput.finishAutofillContext()` segera setelah aksi *login* divalidasi.*  
 ---
 
 ## 📱 Panduan Build & Instalasi di HP (Android)
