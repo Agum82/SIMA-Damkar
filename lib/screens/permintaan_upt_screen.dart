@@ -12,7 +12,6 @@ class PermintaanUptScreen extends StatefulWidget {
 }
 
 class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
-  
   String _formatWaktu(Timestamp? timestamp) {
     if (timestamp == null) return '-';
     return DateFormat('dd-MM-yyyy HH:mm').format(timestamp.toDate());
@@ -50,7 +49,8 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
     );
   }
 
-  Future<void> _updateStatusPermintaan(String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
+  Future<void> _updateStatusPermintaan(
+      String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
     try {
       if (statusBaru == 'Disetujui') {
         var gudangQuery = await FirebaseFirestore.instance
@@ -83,27 +83,36 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
     }
   }
 
-  // FUNGSI YANG DIPERBARUI: Lebih ramping, hemat tempat, dan bisa di-klik untuk Zoom
-  Widget _buildImageWidget(String imageUrl) {
-    if (imageUrl.isEmpty || imageUrl == 'null') {
-      return const SizedBox.shrink(); // Menyembunyikan ruang kosong jika tidak ada foto
+  // FUNGSI YANG DIPERBARUI: Pembatasan Tinggi Card & Zoom Interaktif
+  Widget _buildImageWidget(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty || imageUrl == 'null') {
+      return const SizedBox.shrink(); // Sembunyikan jika tidak ada foto
     }
 
+    // Fungsi pop-up gambar interaktif (Zoom)
     void tampilkanFotoPenuh(Widget imageWidget) {
       showDialog(
         context: context,
         builder: (context) => Dialog(
-          backgroundColor: Colors.black,
-          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(10),
           child: Stack(
+            alignment: Alignment.center,
             children: [
-              Center(child: InteractiveViewer(child: imageWidget)),
+              InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: imageWidget,
+              ),
               Positioned(
-                top: 20,
-                right: 20,
+                top: 10,
+                right: 10,
                 child: IconButton(
                   icon: const Icon(Icons.close, color: Colors.white, size: 30),
                   onPressed: () => Navigator.pop(context),
+                  // Background hitam transparan agar tombol silang lebih jelas
+                  style: IconButton.styleFrom(backgroundColor: Colors.black54),
                 ),
               ),
             ],
@@ -112,52 +121,71 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
       );
     }
 
+    Widget imageContent;
+
+    // Cek apakah gambar berupa URL internet atau Base64
     if (imageUrl.startsWith('http')) {
-      return InkWell(
-        onTap: () => tampilkanFotoPenuh(Image.network(imageUrl)),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            imageUrl, 
-            width: double.infinity, 
-            height: 100, // Tinggi diperkecil
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
+      imageContent = Image.network(
+        imageUrl,
+        width: double.infinity,
+        height: 120, // BATAS TINGGI GAMBAR (Mencegah Card Kebesaran)
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image, size: 50, color: Colors.grey),
       );
     } else {
       try {
-        String cleanBase64 = imageUrl;
+        // Pembersihan Data Base64
+        String cleanBase64 = imageUrl.replaceAll(RegExp(r'\s+'), '');
         if (cleanBase64.contains(',')) {
           cleanBase64 = cleanBase64.split(',').last;
         }
-        cleanBase64 = cleanBase64.replaceAll(RegExp(r'\s+'), '');
-        
-        int padLength = 4 - (cleanBase64.length % 4);
-        if (padLength > 0 && padLength < 4) {
-           cleanBase64 += '=' * padLength;
+        while (cleanBase64.length % 4 != 0) {
+          cleanBase64 += '=';
         }
 
         Uint8List decodedBytes = base64Decode(cleanBase64);
-        
-        return InkWell(
-          onTap: () => tampilkanFotoPenuh(Image.memory(decodedBytes)),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.memory(
-              decodedBytes, 
-              width: double.infinity, 
-              height: 100, // Tinggi diperkecil
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-            ),
-          ),
+
+        imageContent = Image.memory(
+          decodedBytes,
+          width: double.infinity,
+          height: 120, // BATAS TINGGI GAMBAR (Mencegah Card Kebesaran)
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.broken_image, size: 50, color: Colors.grey),
         );
       } catch (e) {
         return const SizedBox.shrink();
       }
     }
+
+    // Tampilan Gambar di dalam Card
+    return InkWell(
+      onTap: () {
+        // Render ulang gambar tanpa batas tinggi untuk pop-up
+        Widget fullImage = imageUrl.startsWith('http')
+            ? Image.network(imageUrl)
+            : Image.memory(base64Decode(_cleanBase64(imageUrl)));
+        tampilkanFotoPenuh(fullImage);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: imageContent,
+      ),
+    );
+  }
+
+  // Helper untuk membersihkan base64 saat dipanggil di zoom
+  String _cleanBase64(String base64String) {
+    String cleaned = base64String.replaceAll(RegExp(r'\s+'), '');
+    if (cleaned.contains(',')) cleaned = cleaned.split(',').last;
+    while (cleaned.length % 4 != 0) cleaned += '=';
+    return cleaned;
   }
 
   @override
@@ -189,37 +217,19 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 70, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  Text('Tidak ada permintaan masuk dari UPT.', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
-                ],
-              ),
-            );
+            return _buildEmptyState();
           }
 
           final daftarPermintaanUPT = snapshot.data!.docs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
             String tingkatKerusakan = data['tingkatKerusakan'] ?? '';
             String namaPelanggan = (data['namaPelanggan'] ?? data['role'] ?? '').toString().toLowerCase();
-            
+
             return tingkatKerusakan == 'Pengajuan Baru' && !namaPelanggan.contains('pos');
           }).toList();
 
           if (daftarPermintaanUPT.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 70, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  Text('Tidak ada permintaan masuk dari UPT.', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
-                ],
-              ),
-            );
+            return _buildEmptyState();
           }
 
           return ListView.builder(
@@ -233,13 +243,16 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
               String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
               int jumlah = data['jumlah'] ?? 0;
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-              String imageUrl = data['imageUrl'] ?? '';
+              // Ubah 'imageUrl' ke default sesuai database Anda (kadang pakai 'foto_bukti')
+              String imageUrl = data['imageUrl'] ?? data['foto_bukti'] ?? '';
               Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
               return Card(
-                elevation: 2,
+                elevation: 3,
+                shadowColor: Colors.grey.withOpacity(0.3),
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                color: Colors.red.shade50, // Latar belakang Card agak kemerahan (opsional)
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -249,7 +262,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const CircleAvatar(
-                            backgroundColor: Colors.redAccent, 
+                            backgroundColor: Colors.redAccent,
                             child: Icon(Icons.assignment, color: Colors.white),
                           ),
                           const SizedBox(width: 12),
@@ -260,7 +273,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                                 Text(namaBarang, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Dari: $namaPelanggan', 
+                                  'Dari: $namaPelanggan',
                                   style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                                 const SizedBox(height: 2),
@@ -270,7 +283,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.orange,
                               borderRadius: BorderRadius.circular(8),
@@ -282,7 +295,6 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                           ),
                         ],
                       ),
-                      
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -294,11 +306,11 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 16),
-                      _buildImageWidget(imageUrl),
-                      const SizedBox(height: 16),
                       
+                      // PANGGIL WIDGET GAMBAR DI SINI
+                      _buildImageWidget(imageUrl),
+                      
+                      const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -324,6 +336,19 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox, size: 70, color: Colors.grey[300]),
+          const SizedBox(height: 10),
+          Text('Tidak ada permintaan masuk dari UPT.', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+        ],
       ),
     );
   }

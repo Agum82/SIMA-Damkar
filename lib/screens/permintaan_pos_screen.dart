@@ -12,7 +12,6 @@ class PermintaanPosScreen extends StatefulWidget {
 }
 
 class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
-  
   String _formatWaktu(Timestamp? timestamp) {
     if (timestamp == null) return '-';
     return DateFormat('dd-MM-yyyy HH:mm').format(timestamp.toDate());
@@ -83,27 +82,34 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     }
   }
 
-  // FUNGSI YANG DIPERBARUI: Lebih ramping, hemat tempat, dan bisa di-klik untuk Zoom
-  Widget _buildImageWidget(String imageUrl) {
-    if (imageUrl.isEmpty || imageUrl == 'null') {
-      return const SizedBox.shrink(); // Menyembunyikan ruang kosong jika tidak ada foto
+  // FUNGSI YANG DIPERBARUI: Pembatasan Tinggi Card & Zoom Interaktif
+  Widget _buildImageWidget(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty || imageUrl == 'null') {
+      return const SizedBox.shrink(); // Sembunyikan jika tidak ada foto
     }
 
     void tampilkanFotoPenuh(Widget imageWidget) {
       showDialog(
         context: context,
         builder: (context) => Dialog(
-          backgroundColor: Colors.black,
-          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(10),
           child: Stack(
+            alignment: Alignment.center,
             children: [
-              Center(child: InteractiveViewer(child: imageWidget)),
+              InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: imageWidget,
+              ),
               Positioned(
-                top: 20,
-                right: 20,
+                top: 10,
+                right: 10,
                 child: IconButton(
                   icon: const Icon(Icons.close, color: Colors.white, size: 30),
                   onPressed: () => Navigator.pop(context),
+                  style: IconButton.styleFrom(backgroundColor: Colors.black54),
                 ),
               ),
             ],
@@ -112,52 +118,66 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
       );
     }
 
+    Widget imageContent;
+
     if (imageUrl.startsWith('http')) {
-      return InkWell(
-        onTap: () => tampilkanFotoPenuh(Image.network(imageUrl)),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            imageUrl, 
-            width: double.infinity, 
-            height: 100, // Tinggi diperkecil
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
+      imageContent = Image.network(
+        imageUrl,
+        width: double.infinity,
+        height: 120, // BATAS TINGGI GAMBAR
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image, size: 50, color: Colors.grey),
       );
     } else {
       try {
-        String cleanBase64 = imageUrl;
+        String cleanBase64 = imageUrl.replaceAll(RegExp(r'\s+'), '');
         if (cleanBase64.contains(',')) {
           cleanBase64 = cleanBase64.split(',').last;
         }
-        cleanBase64 = cleanBase64.replaceAll(RegExp(r'\s+'), '');
-        
-        int padLength = 4 - (cleanBase64.length % 4);
-        if (padLength > 0 && padLength < 4) {
-           cleanBase64 += '=' * padLength;
+        while (cleanBase64.length % 4 != 0) {
+          cleanBase64 += '=';
         }
 
         Uint8List decodedBytes = base64Decode(cleanBase64);
-        
-        return InkWell(
-          onTap: () => tampilkanFotoPenuh(Image.memory(decodedBytes)),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.memory(
-              decodedBytes, 
-              width: double.infinity, 
-              height: 100, // Tinggi diperkecil
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-            ),
-          ),
+
+        imageContent = Image.memory(
+          decodedBytes,
+          width: double.infinity,
+          height: 120, // BATAS TINGGI GAMBAR
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.broken_image, size: 50, color: Colors.grey),
         );
       } catch (e) {
         return const SizedBox.shrink();
       }
     }
+
+    return InkWell(
+      onTap: () {
+        Widget fullImage = imageUrl.startsWith('http')
+            ? Image.network(imageUrl)
+            : Image.memory(base64Decode(_cleanBase64(imageUrl)));
+        tampilkanFotoPenuh(fullImage);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: imageContent,
+      ),
+    );
+  }
+
+  String _cleanBase64(String base64String) {
+    String cleaned = base64String.replaceAll(RegExp(r'\s+'), '');
+    if (cleaned.contains(',')) cleaned = cleaned.split(',').last;
+    while (cleaned.length % 4 != 0) cleaned += '=';
+    return cleaned;
   }
 
   @override
@@ -189,16 +209,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 70, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  const Text('Tidak ada permintaan masuk dari Pos.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                ],
-              ),
-            );
+            return _buildEmptyState();
           }
 
           final daftarPermintaanPos = snapshot.data!.docs.where((doc) {
@@ -210,16 +221,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
           }).toList();
 
           if (daftarPermintaanPos.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 70, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  const Text('Tidak ada permintaan masuk dari Pos.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                ],
-              ),
-            );
+            return _buildEmptyState();
           }
 
           return ListView.builder(
@@ -233,13 +235,16 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
               String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
               int jumlah = data['jumlah'] ?? 0;
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-              String imageUrl = data['imageUrl'] ?? '';
+              // Ditambahkan pengecekan foto_bukti untuk berjaga-jaga
+              String imageUrl = data['imageUrl'] ?? data['foto_bukti'] ?? '';
               Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
               return Card(
-                elevation: 2,
+                elevation: 3,
+                shadowColor: Colors.grey.withOpacity(0.3),
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                color: Colors.orange.shade50, // Diberi warna latar tipis untuk variasi
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -270,7 +275,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.orange,
                               borderRadius: BorderRadius.circular(8),
@@ -295,10 +300,10 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 16),
+                      // Panggilan widget gambar
                       _buildImageWidget(imageUrl),
-                      const SizedBox(height: 16),
                       
+                      const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -324,6 +329,19 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox, size: 70, color: Colors.grey[300]),
+          const SizedBox(height: 10),
+          const Text('Tidak ada permintaan masuk dari Pos.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+        ],
       ),
     );
   }

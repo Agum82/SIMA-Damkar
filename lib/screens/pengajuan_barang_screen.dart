@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io'; 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // DITAMBAHKAN: Untuk upload gambar
+// import 'package:firebase_storage/firebase_storage.dart'; // Dinonaktifkan sementara untuk menghindari error rules Firebase
 
 class PengajuanBarangScreen extends StatefulWidget {
   const PengajuanBarangScreen({super.key});
@@ -17,7 +19,7 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
   final TextEditingController _jumlahController = TextEditingController();
   final TextEditingController _keteranganController = TextEditingController();
   
-  File? _selectedImage; // PERBAIKAN: Menggunakan File asli, bukan Base64
+  File? _selectedImage; 
   bool _isLoading = false;
 
   Future<void> _pickImage() async {
@@ -37,14 +39,13 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
     }
   }
 
-  // PERBAIKAN: Fungsi upload gambar ke Firebase Storage (Sama seperti Lapor Rusak)
-  Future<String?> _uploadImage(File imageFile) async {
+  // SOLUSI BUG: Diubah dari Firebase Storage ke Base64 agar seragam dengan form Kerusakan
+  // dan 100% langsung masuk ke database tanpa kendala Firebase Rules.
+  Future<String?> _konversiKeBase64(File imageFile) async {
     try {
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference ref = FirebaseStorage.instance.ref().child('pengajuan_barang/$fileName.jpg');
-      UploadTask uploadTask = ref.putFile(imageFile);
-      TaskSnapshot snapshot = await uploadTask;
-      return await snapshot.ref.getDownloadURL();
+      List<int> imageBytes = await imageFile.readAsBytes();
+      String base64Image = base64Encode(imageBytes);
+      return base64Image;
     } catch (e) {
       return null;
     }
@@ -120,22 +121,27 @@ class _PengajuanBarangScreenState extends State<PengajuanBarangScreen> {
         }
       } catch (e) {}
 
-      // 2. Upload Gambar jika ada
-      String? fotoUrl;
+      // 2. Olah Gambar Menjadi Base64
+      String? fotoUrl = '';
       if (_selectedImage != null) {
-        fotoUrl = await _uploadImage(_selectedImage!);
+        fotoUrl = await _konversiKeBase64(_selectedImage!);
+        if (fotoUrl == null) {
+           _tampilkanDialog('Gagal memproses gambar. Coba gambar lain.');
+           setState(() => _isLoading = false);
+           return;
+        }
       }
 
-      // 3. Simpan ke database (Sengaja tetap di laporan_kerusakan sesuai desain asli Anda)
+      // 3. Simpan ke database
       await FirebaseFirestore.instance.collection('laporan_kerusakan').add({
         'namaBarang': _namaBarangController.text.trim(),
         'jumlah': jumlah,
-        'tingkatKerusakan': 'Pengajuan Baru', // Ini tanda bahwa ini adalah Permintaan
+        'tingkatKerusakan': 'Pengajuan Baru',
         'keterangan': _keteranganController.text.trim().isEmpty ? 'Tidak ada keterangan' : _keteranganController.text.trim(),
-        'imageUrl': fotoUrl ?? '', // Format URL Firebase
+        'imageUrl': fotoUrl, // Sekarang menyimpan Base64 String yang solid!
         'status': 'Menunggu',
         'namaPelanggan': namaPelanggan,
-        'userId': user.uid, // KUNCI UTAMA: Agar muncul di Riwayat!
+        'userId': user.uid, 
         'createdAt': FieldValue.serverTimestamp(),
       });
 
