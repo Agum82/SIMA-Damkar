@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:local_notifier/local_notifier.dart'; // <-- TAMBAHAN IMPORT UNTUK NOTIFIKASI
 
 import 'admin_profile_screen.dart'; 
 import 'tambah_barang_screen.dart';
@@ -22,6 +23,59 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isImporting = false;
+  bool _isInitialLoad = true; // <-- Mencegah notif lama muncul saat baru login
+
+  @override
+  void initState() {
+    super.initState();
+    _pantauLaporanBaru(); // <-- Mengaktifkan radar notifikasi saat dasbor dibuka
+  }
+
+  // <-- FUNGSI RADAR NOTIFIKASI WINDOWS (DIPERBARUI) -->
+  void _pantauLaporanBaru() {
+    FirebaseFirestore.instance
+        .collection('laporan_kerusakan')
+        .snapshots()
+        .listen((snapshot) {
+          
+      // Abaikan data lama saat aplikasi baru direfresh/dibuka
+      if (_isInitialLoad) {
+        _isInitialLoad = false;
+        return; 
+      }
+
+      // Deteksi jika ada dokumen BARU yang ditambahkan ke Firebase
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data() ?? {};
+          
+          String pengaju = data['namaPelanggan'] ?? 'UPT / Pos';
+          String barang = data['namaBarang'] ?? 'Barang';
+          String tingkat = data['tingkatKerusakan'] ?? ''; // Berisi 'Pengajuan Baru', 'Sedang', atau 'Berat'
+          
+          String titleNotif = '';
+          String bodyNotif = '';
+
+          // Logika pembeda kata-kata notifikasi
+          if (tingkat == 'Pengajuan Baru') {
+            titleNotif = "Ada Permintaan Baru!";
+            bodyNotif = "$pengaju telah mengirim permintaan untuk $barang.";
+          } else {
+            titleNotif = "Ada Laporan Kerusakan $tingkat Terbaru!";
+            bodyNotif = "$pengaju melaporkan kendala pada $barang.";
+          }
+
+          // Buat dan tampilkan pop-up notifikasi Windows
+          LocalNotification notification = LocalNotification(
+            title: titleNotif,
+            body: bodyNotif,
+          );
+          
+          notification.show();
+        }
+      }
+    });
+  }
 
   void _logout(BuildContext context) {
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
