@@ -25,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -63,7 +57,6 @@ class DefaultFirebaseOptions {
     projectId: 'damkargarutapp',
     storageBucket: 'damkargarutapp.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyC3aJeJaRctQ3ETnJ52mjpr9fV34XwVEGs',
     appId: '1:280884779698:ios:b0e38d09c70f40b588c7ab',
@@ -71,5 +64,23 @@ class DefaultFirebaseOptions {
     projectId: 'damkargarutapp',
     storageBucket: 'damkargarutapp.firebasestorage.app',
     iosBundleId: 'com.example.kerjapraktek',
+  );
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyC3aJeJaRctQ3ETnJ52mjpr9fV34XwVEGs',
+    appId: '1:280884779698:ios:b0e38d09c70f40b588c7ab',
+    messagingSenderId: '280884779698',
+    projectId: 'damkargarutapp',
+    storageBucket: 'damkargarutapp.firebasestorage.app',
+    iosBundleId: 'com.example.kerjapraktek',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyCaWDoD93OrEfAF9qbAYk2Ugft7FGdgJWA',
+    appId: '1:280884779698:web:c7188ba013f30bab88c7ab',
+    messagingSenderId: '280884779698',
+    projectId: 'damkargarutapp',
+    authDomain: 'damkargarutapp.firebaseapp.com',
+    storageBucket: 'damkargarutapp.firebasestorage.app',
+    measurementId: 'G-9TM3D5CC1T',
   );
 }

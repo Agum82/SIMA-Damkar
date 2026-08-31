@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,6 +21,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _roleTerpilih = 'UPT'; 
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  // Variabel tambahan untuk fitur foto profil
+  File? _imageFile;
+
+  // Fungsi untuk memilih gambar dari galeri
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+    );
+    if (image != null) {
+      setState(() {
+        _imageFile = File(image.path);
+      });
+    }
+  }
 
   void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
     showDialog(
@@ -68,15 +88,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // 1. Buat akun Authentication
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+      String uid = userCredential.user!.uid;
+      String downloadUrl = '';
+
+      // 2. Jika user memilih foto, unggah ke Firebase Storage
+      if (_imageFile != null) {
+        Reference ref = FirebaseStorage.instance.ref().child('profile_pictures/$uid.jpg');
+        UploadTask uploadTask = ref.putFile(_imageFile!);
+        TaskSnapshot snapshot = await uploadTask;
+        downloadUrl = await snapshot.ref.getDownloadURL();
+      }
+
+      // 3. Simpan data user ke Cloud Firestore termasuk photoUrl
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'nama': _namaController.text.trim(),
         'email': _emailController.text.trim(),
         'role': _roleTerpilih,
+        'photoUrl': downloadUrl, // Menyimpan URL foto profil
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -115,7 +149,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.account_circle, size: 90, color: Colors.red[800]),
+              // Bagian Foto Profil yang bisa diklik untuk memilih gambar
+              Center(
+                child: GestureDetector(
+                  onTap: _pickImage,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: _imageFile != null
+                            ? FileImage(_imageFile!) as ImageProvider
+                            : null,
+                        child: _imageFile == null
+                            ? Icon(Icons.account_circle, size: 100, color: Colors.red[800])
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red[800],
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 30),
               
               TextField(
@@ -161,7 +230,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   border: OutlineInputBorder(), 
                   prefixIcon: Icon(Icons.badge)
                 ),
-                // DIRUBAH: Opsi 'Admin' dihapus dari daftar. Sekarang hanya ada UPT dan Pos.
+                // Opsi 'Admin' dihapus dari daftar. Sekarang hanya ada UPT dan Pos.
                 items: ['UPT', 'Pos'].map((role) => DropdownMenuItem(value: role, child: Text(role))).toList(),
                 onChanged: (value) => setState(() => _roleTerpilih = value!),
               ),
