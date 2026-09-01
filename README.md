@@ -1,185 +1,174 @@
-# SIMA Damkar 🚒
-**Dinas Pemadam Kebakaran Kabupaten Garut**
-
-Sebuah aplikasi berbasis *mobile* (Android/iOS) yang dibangun menggunakan kerangka kerja Flutter. Aplikasi ini dirancang khusus untuk mendigitalisasi dan mempermudah proses pelaporan kerusakan barang serta pengajuan permintaan sarana dan prasarana antara Pos Pemadam, Unit Pelaksana Teknis (UPT), dan Admin Pusat.
+# 🚒 SIMA Damkar (Sistem Informasi Manajemen Aset Pemadam Kebakaran)
 
 ---
 
-## 📋 Daftar Isi
-1. [Pengenalan & Latar Belakang Sistem](#-pengenalan--latar-belakang-sistem)
-2. [Fitur Utama Aplikasi](#-fitur-utama-aplikasi)
-3. [Tampilan Aplikasi & Navigasi](#-tampilan-aplikasi--navigasi)
-4. [Struktur File Layar (Screens)](#-struktur-file-layar-screens)
-5. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
-6. [Tata Cara Pembuatan Aplikasi](#-tata-cara-pembuatan-aplikasi)
-7. [Daftar Bug & Cara Menyelesaikannya](#-daftar-bug--cara-menyelesaikannya)
-8. [Panduan Build & Instalasi di HP (Android)](#-panduan-build--instalasi-di-hp-android)
-
----
-## 📖 Pengenalan & Latar Belakang Sistem
-
-Dinas Pemadam Kebakaran Kabupaten Garut merupakan lembaga pelayanan publik garda terdepan yang memegang tanggung jawab krusial dalam penanggulangan bahaya kebakaran, penyelamatan (*rescue*), serta mitigasi bencana di wilayah administratif Kabupaten Garut yang luas. Dalam menjalankan tugas operasional sehari-hari, kesiapan dan ketersediaan sarana dan prasarana (Sapras)—mulai dari unit kendaraan operasional, selang pemadam tekanan tinggi, alat pelindung diri (APD), hingga peralatan evakuasi teknis—merupakan faktor penentu utama dalam kecepatan dan keberhasilan respons di lapangan.
-
-Namun, dalam praktiknya, pengelolaan inventaris dan pelaporan kerusakan fasilitas di pos-pos sektor maupun Unit Pelaksana Teknis (UPT) di bawah naungan Dinas Pemadam Kebakaran Kabupaten Garut masih menghadapi berbagai kendala struktural. Beberapa permasalahan utama yang sering dijumpai meliputi:
-
-1. **Proses Pelaporan yang Konvensional:** Pengiriman informasi kerusakan alat atau pengajuan logistik dari pos cabang ke kantor pusat umumnya masih menggunakan metode manual (seperti pesan singkat atau rekapitulasi kertas). Hal ini berisiko tinggi menyebabkan informasi terlambat sampai, tercecer, atau kurang akurat.
-2. **Keterlambatan Rekapitulasi Data Inventaris:** Admin pusat seringkali kesulitan untuk memantau kondisi riil inventaris di setiap pos secara *real-time*. Akibatnya, pengambilan keputusan terkait perbaikan atau pengadaan barang baru kerap mengalami penundaan.
-3. **Risiko Kesalahan Pencatatan (Human Error):** Pengelolaan stok gudang yang belum terdigitalisasi dengan baik meningkatkan potensi selisih data antara fisik barang di gudang dengan catatan pembukuan administratif.
-4. **Kurangnya Transparansi Status Pengajuan:** Petugas di pos atau UPT sering kali harus menunggu tanpa kejelasan terkait status tindak lanjut dari laporan kerusakan yang telah mereka kirimkan, apakah sedang ditinjau, disetujui, atau ditolak oleh pihak pusat.
-
-Berdasarkan berbagai permasalahan tersebut, transformasi digital melalui penerapan sistem informasi berbasis perangkat bergerak (*mobile application*) menjadi suatu kebutuhan yang mendesak (*urgent*). 
-
-Untuk menjawab tantangan ini, dikembangkanlah **SIMA DAmkar (Sistem Informasi Manajemen Sarana dan Prasarana Dinas Pemadam Kebakaran)**. Aplikasi ini dirancang sebagai platform terpadu yang menjembatani komunikasi operasional antara petugas lapangan (Pos dan UPT) dengan manajemen pusat (Admin). Dengan memanfaatkan teknologi *cross-platform* Flutter dan arsitektur *cloud database* berbasis *real-time* (Firebase Cloud Firestore), SIMA DAmkar mampu mendigitalisasi seluruh siklus hidup pelaporan—mulai dari pengiriman laporan kerusakan berlampirkan bukti foto, validasi tingkat keparahan (Ringan, Sedang, Berat), hingga pemotongan stok gudang pusat secara otomatis saat pengajuan disetujui.
-
-Kehadiran sistem ini diharapkan mampu meningkatkan efisiensi birokrasi internal, meminimalisir kesalahan pencatatan logistik, mempercepat waktu tanggap (*response time*) pemeliharaan sarana, serta mewujudkan tata kelola inventaris yang transparan dan akuntabel di lingkungan Dinas Pemadam Kebakaran Kabupaten Garut.
-
----
-## 🚀 Fitur Utama Aplikasi
-* **Autentikasi Multi-Peran yang Aman:** Menggunakan Firebase Authentication yang terintegrasi langsung dengan penyimpanan data pengguna di Firestore, lengkap dengan dukungan fitur *Autofill* dan *Password Manager* bawaan perangkat untuk kemudahan masuk.
-* **Pelaporan & Pengajuan Real-time:** Memungkinkan petugas lapangan mengirimkan formulir laporan kerusakan atau permintaan barang baru dengan menyertakan bukti visual berupa foto.
-* **Manajemen Gambar Hibrida (Base64 & URL):** Sistem secara cerdas mampu membaca dan merender data gambar baik yang bersumber dari URL Internet maupun string terkompresi berformat *Base64*.
-* **Pengurangan Stok Otomatis:** Ketika Admin menyetujui suatu pengajuan permintaan barang dari pos, sistem secara otomatis menghitung dan memotong jumlah ketersediaan stok di basis data gudang pusat (`gudang_barang`).
-* **Sistem Pelacakan Status & Riwayat:** Setiap laporan memiliki siklus hidup yang transparan, mulai dari status *Menunggu*, hingga berubah menjadi *Disetujui* atau *Ditolak*, yang kemudian diarsipkan secara otomatis ke dalam menu Riwayat pengguna.
-* **Fitur Zoom Interaktif:** Dilengkapi dengan komponen *InteractiveViewer* pada dialog gambar agar pengguna dapat memperbesar foto bukti kerusakan untuk pemeriksaan yang lebih detail.
+## 📑 Daftar Isi
+1. [Pendahuluan](#-pendahuluan)
+2. [Latar Belakang](#-latar-belakang)
+3. [Tampilan Aplikasi (Screenshots)](#-tampilan-aplikasi-screenshots)
+4. [Fitur Utama (Main Features)](#-fitur-utama-main-features)
+5. [Fitur Sampingan & Pendukung](#-fitur-sampingan--pendukung-side-features)
+6. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
+7. [Panduan Instalasi Lengkap](#-panduan-instalasi-lengkap-untuk-os-windows)
+8. [Aturan Pengoperasian Fitur Notifikasi](#-aturan-pengoperasian-fitur-notifikasi-khusus-admin)
+9. [Kendala yang Diketahui (Bugs) & Cara Penyelesaian](#-kendala-yang-diketahui-bugs--cara-penyelesaian)
 
 ---
 
-## 📸 Tampilan Aplikasi & Navigasi
-*(Letakkan file gambar UI pada folder `assets/images/` di dalam proyek, lalu sesuaikan nama filenya di bawah ini)*
+## 📌 Pendahuluan
+Selamat datang di repositori resmi **SIMA DAmkar**. 
 
-### 1. Autentikasi
-![Halaman Login](assets/images/login_screen.png) 
-![Halaman Register](assets/images/register_screen.png)
+Di era digitalisasi dan transformasi *e-Government*, integrasi teknologi informasi ke dalam sektor pelayanan publik bukan lagi sebuah pilihan, melainkan sebuah keharusan. **SIMA Damkar** hadir sebagai sebuah inovasi perangkat lunak (*software*) berbasis *desktop* Windows yang dirancang secara khusus dan komprehensif untuk mendigitalisasi ekosistem manajemen inventaris barang, pelaporan kerusakan armada, dan alur distribusi logistik di lingkungan Dinas Pemadam Kebakaran dan Penyelamatan.
 
-### 2. Dashboard Berdasarkan Role
-![Dashboard Admin](assets/images/dashboard_admin.png)
-![Dashboard UPT/Pos](assets/images/dashboard_upt_pos.png)
-
-### 3. Form Pengajuan & Laporan
-![Form Pengajuan Barang](assets/images/form_pengajuan.png)
-![Form Laporan Kerusakan](assets/images/form_kerusakan.png)
+Aplikasi ini tidak sekadar berfungsi sebagai alat pencatatan digital, melainkan sebuah jembatan komunikasi operasional dua arah yang menghubungkan Markas Komando (Admin Pusat) dengan seluruh jejaring Pos Sektor atau Unit Pelaksana Teknis (UPT) yang tersebar di berbagai wilayah. Dibangun di atas arsitektur *Cloud Computing* menggunakan Firebase dan *framework* Flutter, SIMA DAmkar mengeliminasi hambatan jarak dan waktu, memastikan setiap pengajuan barang dan pelaporan kerusakan darurat dari lapangan dapat diterima, divalidasi, dan ditindaklanjuti oleh Pusat secara *real-time*, terstruktur, dan transparan.
 
 ---
 
-## 📂 Struktur File Layar (Screens)
-Aplikasi ini dikembangkan dengan memisahkan logika UI ke dalam beberapa file utama yang berfokus pada fungsionalitas masing-masing:
-* `login_screen.dart`: Halaman masuk dengan fitur *AutofillGroup* untuk integrasi ke *Password Manager* HP.
-* `admin_dashboard_screen.dart` / `upt_dashboard_screen.dart`: Pusat kendali navigasi berdasarkan peran pengguna.
-* `kerusakan_sedang_screen.dart` / `kerusakan_berat_screen.dart`: Layar admin untuk memonitor laporan kerusakan spesifik.
-* `permintaan_pos_screen.dart` / `permintaan_upt_screen.dart`: Layar admin untuk meninjau pengajuan barang baru dari cabang.
-* `riwayat_permintaan_screen.dart`: Layar histori status untuk melihat laporan yang telah disetujui atau ditolak.
+## 📖 Latar Belakang
+
+**1. Urgensi Kesiapsiagaan dan Standar Pelayanan Minimal (SPM)**
+Dinas Pemadam Kebakaran (Damkar) merupakan garda terdepan institusi pemerintah dalam penanganan kondisi gawat darurat yang menyangkut hajat hidup dan keselamatan masyarakat luas. Tugas pokok dan fungsi (Tupoksi) institusi ini mencakup pencegahan kebakaran, pemadaman api, operasi penyelamatan (*rescue*), evakuasi korban bencana alam, hingga penanganan insiden bahan berbahaya dan beracun (B3). Dalam menjalankan tugas yang berisiko sangat tinggi ini, Damkar dipacu oleh satu Indikator Kinerja Utama yang sangat krusial, yaitu **Response Time** (waktu tanggap maksimal 15 menit sejak laporan diterima hingga armada tiba di lokasi). 
+
+Keberhasilan dalam mencapai *Response Time* yang ideal dan meminimalisir jatuhnya korban jiwa tidak hanya bergantung pada kecakapan, kesiapan fisik, dan keberanian personel, tetapi secara mutlak ditunjang oleh **kesiapan sarana, prasarana, dan kelengkapan logistik operasional**. Armada pemadam (mobil pompa, mobil tangki, *ladder truck*), kelengkapan mekanis seperti selang pemadam (*firehose*), *nozzle*, pompa portabel, peralatan ekstraksi, tabung pernapasan SCBA (*Self-Contained Breathing Apparatus*), hingga Alat Pelindung Diri (APD) harus selalu dipastikan dalam kondisi prima dan berstatus "Siaga 1".
+
+**2. Kompleksitas Distribusi dan Tantangan Geografis**
+Untuk mempercepat *Response Time* dan memperluas jangkauan perlindungan wilayah, kekuatan operasional Damkar didistribusikan ke berbagai Pos Sektor atau UPT yang tersebar di tingkat kecamatan. Tersebarnya personel dan aset logistik bernilai tinggi ini menimbulkan tantangan manajerial yang sangat besar bagi Markas Komando (Mako) selaku pusat komando dan administrasi. Mako dituntut untuk mampu melakukan pemantauan, pendataan, audit ketersediaan barang, serta menjamin kelayakan fungsi setiap alat di seluruh Pos secara akurat dan berkesinambungan. Mobilitas operasi yang tinggi menyebabkan peralatan-peralatan ini memiliki siklus keausan yang cepat dan sangat rentan mengalami kerusakan mendadak di lapangan.
+
+**3. Kelemahan Sistem Konvensional (Status Quo)**
+Selama ini, sistem pendataan inventaris gudang, mutasi alokasi barang, pelaporan kerusakan alat, hingga pengajuan pengadaan (*restock*) dari tiap Pos ke Pusat masih didominasi oleh metode konvensional. Pendataan stok sering kali hanya mengandalkan buku mutasi fisik, pencatatan di papan tulis, atau pengiriman formulir kertas yang rentan hilang. Lebih jauh lagi, laporan kerusakan armada atau permohonan penggantian alat vital sering kali hanya dikirimkan melalui grup aplikasi pesan instan komersial (seperti WhatsApp). 
+
+Metode konvensional ini melahirkan berbagai disfungsi birokrasi dan celah operasional:
+*   **Asimetri Informasi:** Mako kesulitan memantau sisa stok logistik dan sebaran alat secara *real-time*. Validasi data mengharuskan admin melakukan panggilan telepon satu per satu ke setiap Pos, yang mana sangat tidak efisien.
+*   **Risiko Kehilangan Data (Human Error):** Laporan kerusakan darurat dari Pos yang dikirim via WhatsApp sangat mudah tertumpuk, tenggelam oleh pesan lain, atau terabaikan, sehingga memperlambat respons perbaikan.
+*   **Birokrasi yang Pasif dan Lambat:** Tidak adanya *platform* pengajuan terpusat membuat alur persetujuan (*approval*) dari pimpinan menjadi panjang, berbelit, dan tidak memiliki standar baku.
+*   **Kesulitan Audit dan Perencanaan Anggaran:** Ketiadaan basis data riwayat transaksi (*log history*) yang terstruktur menyulitkan pimpinan Mako dalam menyusun Laporan Pertanggungjawaban (LPJ) maupun menyusun Rencana Anggaran Biaya (RAB) pengadaan aset untuk tahun anggaran berikutnya.
+
+**4. Risiko Fatalitas Akibat Kelalaian Administrasi**
+Konsekuensi dari lambatnya sistem administrasi ini berdampak langsung pada keselamatan di lapangan. Jika sebuah Pos melaporkan kerusakan selang atau kebocoran tangki armada namun laporannya terhambat di meja administrasi, Pos tersebut terpaksa merespons panggilan kebakaran dengan peralatan seadanya. Kondisi ini secara langsung mempertaruhkan nyawa petugas di garis depan, membahayakan warga yang menanti pertolongan, serta berpotensi memperbesar kerugian materiil akibat api yang gagal dipadamkan tepat waktu.
+
+**5. Solusi Digitalisasi: Implementasi SIMA DAmkar**
+Menjawab kesenjangan (*gap*) antara tuntutan operasional yang sangat dinamis dan lambatnya sistem administrasi konvensional, **SIMA DAmkar** dikembangkan sebagai solusi *Enterprise Resource Planning* (ERP) skala spesifik untuk institusi Pemadam Kebakaran. 
+
+Melalui aplikasi *desktop* ini, seluruh proses bisnis logistik didigitalisasi:
+*   Admin Pusat memiliki panel kendali visual untuk memantau fluktuasi stok gudang, meninjau foto bukti kerusakan, dan memberikan persetujuan (*Approve/Reject*) hanya dengan satu klik.
+*   Pos/UPT difasilitasi dengan sistem Triase Pelaporan, di mana mereka dapat mengklasifikasikan tingkat urgensi kerusakan (Sedang/Berat) agar Pusat dapat memprioritaskan penanganan.
+*   Dilengkapi teknologi **Push Notification terintegrasi OS Windows**, sistem ini mengubah komputer Mako menjadi radar aktif. Setiap laporan darurat dari Pos akan langsung membunyikan notifikasi *pop-up* di layar komputer Admin pada detik yang sama, meminimalisir kemungkinan laporan terlewatkan.
+
+Melalui modernisasi ekosistem informasi menggunakan SIMA DAmkar, institusi Pemadam Kebakaran dapat memangkas rantai birokrasi, meningkatkan transparansi dan akuntabilitas aset, serta memastikan seluruh satuan di setiap wilayah senantiasa didukung oleh peralatan operasional yang tangguh, terdata, dan siap digunakan demi menyelamatkan nyawa masyarakat.
 
 ---
 
-## 🛠 Teknologi yang Digunakan
-* **Framework:** [Flutter](https://flutter.dev/) (Dart)
-* **Backend & Database:** Firebase Cloud Firestore
-* **Autentikasi:** Firebase Authentication
-* **Penyimpanan Lokal:** Shared Preferences
-* **Format Tanggal:** package `intl`
+## 📸 Tampilan Aplikasi (Screenshots)
+
+| Halaman Login | Halaman Register |
+| :---: | :---: |
+| ![Login Screen](assets/images/login_screen.png) | ![Register Screen](assets/images/register_screen.png) |
+
+| Dashboard Admin (Pusat) | Dashboard UPT / Pos |
+| :---: | :---: |
+| ![Admin Dashboard](assets/images/dashboard_admin.png) | ![UPT/Pos Dashboard](assets/images/dashboard_upt_pos.png) |
+
+| Form Pengajuan Barang | Form Laporan Kerusakan |
+| :---: | :---: |
+| ![Form Pengajuan](assets/images/form_pengajuan.png) | ![Form Kerusakan](assets/images/form_kerusakan.png) |
 
 ---
 
-## 📝 Tata Cara Pembuatan Aplikasi (Dari Awal - Akhir)
+## 🌟 Fitur Utama (Main Features)
 
-Pengembangan aplikasi ini dilakukan melalui tahapan sistematis dari nol hingga tahap *deployment*:
+Aplikasi ini memiliki sistem berbasis peran (*Role-Based Access*) yang membagi fitur berdasarkan jenis akun (Admin Pusat dan Pos/UPT):
 
-### Tahap 1: Inisiasi Proyek & Desain UI
-1. Membuat proyek Flutter baru menggunakan perintah terminal `flutter create sima_damkar`.
-2. Merancang kerangka UI (*User Interface*) untuk halaman statis menggunakan komponen Material Design Flutter.
-3. Membagi sistem navigasi berdasarkan peran (*Role-Based Navigation*).
+### 👨‍💻 Hak Akses Admin (Pusat)
+1. **Manajemen Gudang Terpusat:** Memantau, menambah, mengubah, dan menghapus data stok barang. Sistem dirancang agar barang dengan stok `0` (habis) tetap tercatat di database untuk mempermudah proses *restock*.
+2. **Sistem Persetujuan (Approval):** Admin dapat meninjau, menyetujui (Approve), atau menolak (Reject) permintaan barang dan laporan kerusakan yang masuk dari setiap Pos/UPT.
+3. **Notifikasi Desktop Real-Time:** Dilengkapi dengan sistem *push notification* Windows. Saat Admin sedang membuka aplikasi lain (seperti Word atau Browser), *pop-up* bersuara akan muncul di pojok kanan bawah layar (Action Center) setiap kali ada tiket permintaan atau laporan kerusakan baru.
+4. **Log Riwayat Transaksi:** Seluruh aktivitas persetujuan dan penolakan terekam dengan jelas pada menu Riwayat.
+5. **Klasifikasi Laporan:** Memisahkan data manajemen berdasarkan kategori: Permintaan UPT, Permintaan Pos, Kerusakan Sedang, dan Kerusakan Berat.
 
-### Tahap 2: Konfigurasi Firebase & Backend
-1. Mendaftarkan proyek baru di Firebase Console.
-2. Mengaktifkan layanan **Authentication** (metode Email/Password) dan **Firestore Database** untuk penyimpanan data mentah (NoSQL).
-3. Menghubungkan aplikasi Flutter dengan Firebase menggunakan utilitas Firebase CLI (`flutterfire configure`).
-4. Menambahkan *package* pendukung ke dalam file `pubspec.yaml`.
-
-### Tahap 3: Pembuatan Logika Autentikasi & Sesi
-1. Mendaftarkan fungsi *Register* yang menyimpan kredensial di Auth dan menyimpan *Role* (Admin/UPT/Pos) ke dalam dokumen *User* di Firestore.
-2. Membangun fungsi Login yang menyeleksi dokumen Firestore setelah autentikasi berhasil, lalu melempar pengguna ke Dashboard yang sesuai jabatannya.
-3. Mengonfigurasi `AutofillGroup` agar sistem membaca fitur *Google Password Manager* saat pengguna mengetik kredensial login.
-
-### Tahap 4: Implementasi Fitur Utama (CRUD)
-1. **Create:** Mengunggah form teks beserta gambar. Gambar difoto, dikompres, dikonversi ke format *String Base64*, dan didorong ke koleksi `laporan_kerusakan`.
-2. **Read:** Memanfaatkan `StreamBuilder` untuk menarik data masuk ke antarmuka secara *real-time* tanpa perlu di-*refresh*.
-3. **Update:** Membuat fungsi asinkron (Setujui/Tolak). Jika tombol disetujui ditekan, sistem otomatis mencari *id* barang di `gudang_barang` dan mengkalkulasi pengurangan stok.
-4. **Delete/History:** Memfilter *query* data Firestore berdasarkan parameter status (`Menunggu` vs `Disetujui/Ditolak`) agar data mengalir ke halaman Riwayat.
-
-### Tahap 5: Standarisasi Tampilan Komponen
-1. Menyeragamkan logika *Card* pelaporan di semua antarmuka (Kerusakan & Permintaan) agar proporsional di berbagai ukuran HP.
-2. Menerapkan fungsi pembacaan gambar hibrida (`_buildImageWidget`) yang bisa otomatis merender tipe URL Internet maupun Teks Base64, dan tahan terhadap *error* ketika *string* data terputus.
+### 🚒 Hak Akses Pos / UPT
+1. **Form Pengajuan Barang:** UPT/Pos dapat meminta pasokan logistik atau peralatan baru ke Pusat.
+2. **Pelaporan Kerusakan (Triage):** Pos dapat melaporkan aset/armada yang rusak dengan melampirkan foto bukti, serta menentukan tingkat urgensi (Kerusakan Sedang / Berat).
+3. **Tracking Status Tiket:** Pos dapat memantau apakah pengajuan mereka masih dalam status "Menunggu", "Disetujui", atau "Ditolak" secara langsung.
 
 ---
 
-## 🐛 Daftar Bug & Cara Menyelesaikannya
+## 🛠️ Fitur Sampingan & Pendukung (Side Features)
 
-Selama proses pengerjaan aplikasi, terdapat beberapa kendala teknis yang berhasil dipecahkan:
+1. **Import Data Massal (CSV Import):** Admin dapat memasukkan ribuan data master barang (termasuk alokasi distribusi per Pos/UPT) secara otomatis hanya dengan mengunggah file CSV. Sistem memiliki logika parsing cerdas untuk membaca kolom data Damkar.
+2. **Pencarian Cerdas (Smart Search):** Tersedia kolom pencarian di halaman Riwayat Transaksi. Admin dapat memfilter data dengan mengetik nama barang, nama pengaju, keterangan, atau status dengan sangat cepat.
+3. **Hapus Massal (Multi-Select Delete):** Admin dapat mencentang (ceklis) banyak riwayat transaksi sekaligus untuk dihapus (*Batch Delete*) agar database Firebase tetap bersih dan tidak melebihi kuota.
+4. **Interactive Image Viewer:** Foto bukti kerusakan yang dikirim oleh Pos dapat diklik untuk diperbesar (*Zoom In/Out* dan *Pan*) agar Admin bisa melihat detail kerusakan dengan jelas.
+5. **Autentikasi Aman:** Sistem *Login* dan *Register* menggunakan Firebase Authentication yang terenkripsi.
 
-1. **Bug: Tampilan Kartu (Card) Laporan Terlalu Besar**
-   * **Penyebab:** Tinggi gambar (preview foto bukti) di-set statis `180` piksel, membuat layar HP cepat penuh dan UI berantakan.
-   * **Solusi:** Memperkecil tinggi *frame* gambar menjadi `100` piksel, menyembunyikan kontainer yang kosong (`SizedBox.shrink()`), dan menambahkan `InteractiveViewer` pada *Dialog Pop-up* agar gambar dapat diklik (zoom) untuk melihat detail tanpa merusak tata letak *list*.
-
-2. **Bug: Gambar Base64 Tidak Muncul (Invalid Length)**
-   * **Penyebab:** Teks string Base64 dari *database* Firestore sering memiliki spasi siluman, imbuhan *metadata* (`data:image/jpeg;base64,`), atau kehilangan karakter validasi (`=`) di akhir teks.
-   * **Solusi:** Menulis rutin *Data Cleaning* pada kode sebelum fungsi `base64Decode` dijalankan. Yaitu menghapus prefix `.split(',').last`, membuang spasi `.replaceAll(RegExp(r'\s+'), '')`, dan mengkalkulasi modulo 4 untuk menambah karakter `=` yang hilang.
-
-3. **Bug: Pop-up "Simpan Sandi" (Autofill) Tidak Muncul di Halaman Login**
-   * **Penyebab:** *TextField* standar Flutter tidak memiliki *bridge* otomatis ke layanan *Password Manager* OS Android/iOS.
-   * **Solusi:** Membungkus *TextField* dengan `AutofillGroup`, mengisi `autofillHints: [AutofillHints.email, AutofillHints.password]`, dan secara eksplisit memanggil `TextInput.finishAutofillContext()` segera setelah aksi *login* divalidasi.*  
 ---
 
-## 📱 Panduan Build & Instalasi di HP (Android)
+## 💻 Teknologi yang Digunakan
+- **Framework:** Flutter (Dart)
+- **Target OS:** Windows Desktop (`.exe`)
+- **Backend & Database:** Firebase Cloud Firestore & Firebase Authentication
+- **Storage:** Firebase Storage & Image Base64 Encoding
+- **Notifikasi:** `local_notifier` (Windows Action Center Integration)
+- **Installer Builder:** Inno Setup Compiler
 
-Langkah-langkah berikut digunakan untuk mengemas kode sumber (*Source Code*) menjadi aplikasi matang siap pakai (.APK) dan memasangnya di *smartphone*.
+---
 
-### A. Persiapan Lingkungan (*Environment*)
-1. Pastikan Anda telah menginstal **Flutter SDK** beserta perkakas pengembangan Android.
-2. Buka Terminal / CMD di dalam direktori proyek SIMA DAmkar, lalu periksa kesehatan sistem dengan perintah:
-   ```bash
-   flutter doctor
-   ```
-3. Unduh dan perbarui semua dependensi pihak ketiga (*packages*) yang dideklarasikan di `pubspec.yaml`:
-   ```bash
-   flutter pub get
-   ```
+## 📥 Panduan Instalasi Lengkap (Untuk OS Windows)
 
-### B. Proses Kompilasi APK (Mode Release)
-Metode ini menghasilkan file instalasi ringan dan cepat yang ditujukan untuk didistribusikan ke staf/pengguna akhir.
+Aplikasi ini dikemas dalam bentuk *installer* mandiri bernama `SIMA_Damkar_Setup.exe`. Ikuti langkah-langkah di bawah ini untuk memasang aplikasi ke laptop/PC Anda:
 
-1. Bersihkan *cache* sisa *build* sebelumnya untuk mencegah galat konflik file:
-   ```bash
-   flutter clean
-   flutter pub get
-   ```
-2. Mulai proses kompilasi kode menjadi APK *Release*:
-   ```bash
-   flutter build apk --release
-   ```
-3. Proses ini memakan waktu beberapa menit. Jika sukses, file `app-release.apk` akan digenerate secara otomatis pada rute direktori:
-   `[Folder-Proyek]/build/app/outputs/flutter-apk/app-release.apk`
+### Tahap 1: Mengunduh File
+1. Minta file `SIMA_Damkar_Setup.exe` versi terbaru dari pengembang atau unduh dari menu *Releases* di GitHub ini.
+2. Simpan file tersebut di folder komputer Anda (misalnya di folder *Downloads*).
 
-### C. Instalasi Aplikasi ke HP
-1. Pindahkan file `app-release.apk` dari PC ke memori internal HP Android Anda (melalui Kabel Data, Google Drive, atau Bluetooth).
-2. Melalui HP Anda, buka aplikasi pengelola berkas (*File Manager*), cari APK tersebut, lalu ketuk untuk memasang.
-3. Jika dihadang oleh notifikasi privasi bawaan Android ("Instal aplikasi yang tidak dikenal"):
-   * Pilih menu **Pengaturan (Settings)** pada dialog *pop-up*.
-   * Geser *toggle* untuk mengaktifkan izin **"Izinkan dari sumber ini"**.
-   * Kembali ke menu instalasi, dan tekan **Instal**.
-4. Aplikasi SIMA DAmkar telah berhasil terinstal dan siap digunakan.
+### Tahap 2: Menjalankan Installer & Melewati SmartScreen (PENTING)
+Karena aplikasi ini dibuat secara independen dan tidak menggunakan sertifikat berbayar korporat, sistem keamanan Windows Defender mungkin akan memblokirnya di awal. Ini sangat normal dan **100% aman**.
+1. Klik 2x pada file `SIMA_Damkar_Setup.exe`.
+2. Jika muncul jendela peringatan berwarna biru terang bertuliskan **"Windows protected your PC"** (SmartScreen):
+   - Jangan panik, klik teks kecil bertuliskan **"More info"** (Info lebih lanjut) di bawah paragraf peringatan.
+   - Setelah diklik, nama aplikasi akan muncul, beserta tombol baru di kanan bawah.
+   - Klik tombol **"Run anyway"** (Tetap jalankan).
 
-### D. Live Debugging & Pengujian (via Kabel USB)
-Untuk menguji perubahan kode secara instan (*Hot Reload*) atau memvalidasi fitur spesifik sistem seperti fungsi *Autofill Password*, jalankan aplikasi langsung ke HP dari *code editor*.
+### Tahap 3: Proses Instalasi
+1. Setelah jendela instalasi (*Setup Wizard*) terbuka, klik **Next**.
+2. Pilih lokasi penyimpanan folder (biarkan *default* jika tidak yakin), lalu klik **Next**.
+3. Pastikan kotak **"Create a desktop shortcut"** dicentang agar ikon aplikasi muncul di layar depan laptop Anda, lalu klik **Next**.
+4. Klik **Install** dan tunggu proses hingga garis hijau penuh.
+5. Terakhir, klik **Finish**. Aplikasi SIMA DAmkar kini siap digunakan!
 
-1. Siapkan HP Android Anda, buka **Pengaturan > Tentang Ponsel**. Ketuk bagian **Nomor Bentukan (Build Number)** sebanyak 7 kali berturut-turut untuk membuka opsi pengembang rahasia.
-2. Kembali ke halaman utama pengaturan, buka menu **Opsi Pengembang (Developer Options)**.
-3. Temukan dan aktifkan sakelar **Debugging USB (USB Debugging)**.
-4. Colokkan HP ke komputer menggunakan kabel data. Izinkan akses *debugging* jika muncul peringatan di layar HP.
-5. Jalankan perintah di bawah ini pada Terminal editor untuk memastikan HP sudah terhubung:
-   ```bash
-   flutter devices
-   ```
-6. Eksekusi kode ke HP Anda dengan mengetik:
-   ```bash
-   flutter run
-   ```
+### 🔄 Catatan Saat Melakukan Update (Pembaruan) Aplikasi
+Jika di laptop Anda sudah terinstal SIMA DAmkar versi lama, **Anda TIDAK PERLU menghapus (uninstall) versi lama tersebut.**
+Cukup jalankan file `SIMA_Damkar_Setup.exe` versi baru dengan langkah yang sama seperti di atas. Sistem akan otomatis menimpa file lama dengan fitur terbaru. Data akun dan stok barang Anda **dijamin aman** karena tersimpan di *Cloud Database*.
+
+---
+
+## 🚨 Aturan Pengoperasian Fitur Notifikasi (Khusus Admin)
+Agar Admin selalu menerima pemberitahuan/notifikasi darurat secara *real-time*:
+- Buka aplikasi dan Login sebagai Admin.
+- **DILARANG** menutup aplikasi menggunakan tanda Silang **( X )** di pojok kanan atas saat jam kerja operasional. Jika ditutup total, radar notifikasi akan mati.
+- Cukup tekan tombol **Minimize ( - )** agar aplikasi bersembunyi di *Taskbar* bagian bawah. Selama aplikasi berada di *Taskbar*, *pop-up* notifikasi akan tetap masuk ke layar Windows Anda.
+
+---
+
+## 🐛 Kendala yang Diketahui (Bugs) & Cara Penyelesaian
+
+Dalam pengoperasiannya, terdapat beberapa batasan teknis (bug) pada sistem operasi Windows yang mungkin terjadi. Berikut adalah cara untuk mengatasi kendala tersebut:
+
+**1. Kendala: Notifikasi tidak muncul di layar komputer Admin (Tidak ada suara/pop-up).**
+*   **Penyebab:** Arsitektur sistem operasi Windows akan memutus koneksi internet (*kill process*) pada aplikasi berformat `.exe` jika aplikasi ditutup total. Hal ini menyebabkan *listener* Firebase ikut mati.
+*   **Penyelesaian:** Pastikan Anda **tidak mengeklik tanda silang (X)** di pojok kanan atas. Gunakan tombol **Minimize (-)** agar aplikasi turun ke *Taskbar* bawah. Selama aplikasi dalam kondisi *minimize*, notifikasi akan tetap masuk secara normal.
+
+**2. Kendala: Gagal memasukkan (Import) data barang secara massal menggunakan file CSV.**
+*   **Penyebab:** Format pemisah kolom (*delimiter*) pada aplikasi Excel tidak sesuai dengan standar pembacaan sistem, biasanya disebabkan oleh perbedaan pengaturan wilayah (*Region*) di komputer pengguna.
+*   **Penyelesaian:** Pastikan file yang Anda unggah benar-benar berformat **.csv (Comma delimited)**. Buka file CSV tersebut menggunakan aplikasi *Notepad* untuk memastikan bahwa antar kata dipisahkan menggunakan tanda **koma ( , )**, bukan titik koma ( ; ).
+
+**3. Kendala: Aplikasi tidak bisa melakukan proses *Login* atau tampilan data kosong/berputar terus (*loading*).**
+*   **Penyebab:** Koneksi internet terputus atau *Firewall* bawaan Windows Defender memblokir akses internet untuk aplikasi ini.
+*   **Penyelesaian:** Pastikan jaringan internet (WiFi/LAN) stabil. Jika koneksi lancar, buka pengaturan `Windows Defender Firewall` > pilih menu `Allow an app through firewall` > cari `SIMA_Damkar_Setup.exe` atau `sima_damkar.exe` > lalu **centang** pada kotak *Private* dan *Public*.
+
+**4. Kendala: Tiba-tiba muncul peringatan Layar Biru (SmartScreen) saat membuka aplikasi.**
+*   **Penyebab:** Ini bukan virus, melainkan proteksi *default* dari sistem Windows terhadap aplikasi yang dikembangkan secara mandiri tanpa sertifikat lisensi berbayar dari perusahaan besar.
+*   **Penyelesaian:** Klik teks **"More info"**, lalu klik tombol **"Run anyway"** yang muncul di pojok kanan bawah.
+
+---
+**Pengembang:** Agum Aidil Saepul Rohman | Teknik Informatika, Institut Teknologi Garut.  
+*Didedikasikan untuk meningkatkan kecepatan, efisiensi operasional, dan digitalisasi logistik Pemadam Kebakaran.*
