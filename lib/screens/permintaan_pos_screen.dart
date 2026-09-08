@@ -49,9 +49,11 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     );
   }
 
+  // FUNGSI UTAMA: Mengatur Status & Sinkronisasi Stok Gudang Secara Presisi
   Future<void> _updateStatusPermintaan(String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
     try {
       if (statusBaru == 'Disetujui') {
+        // Cari barang di gudang berdasarkan nama (menggunakan field 'nama')
         var gudangQuery = await FirebaseFirestore.instance
             .collection('gudang_barang')
             .where('nama', isEqualTo: namaBarangDiminta)
@@ -59,17 +61,26 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
 
         if (gudangQuery.docs.isNotEmpty) {
           var gudangDoc = gudangQuery.docs.first;
-          int stokSekarang = gudangDoc['jumlah'] ?? 0;
-          int stokBaru = stokSekarang - jumlahDiminta;
-          if (stokBaru < 0) stokBaru = 0;
+          int stokSekarang = gudangDoc.data()['jumlah'] ?? 0;
 
-          await FirebaseFirestore.instance
-              .collection('gudang_barang')
-              .doc(gudangDoc.id)
-              .update({'jumlah': stokBaru});
+          if (stokSekarang <= jumlahDiminta) {
+            // Jika stok gudang habis atau pas dengan jumlah yang diminta, hapus dokumen barang dari gudang
+            await FirebaseFirestore.instance
+                .collection('gudang_barang')
+                .doc(gudangDoc.id)
+                .delete();
+          } else {
+            // Jika stok masih bersisa, kurangi jumlah stoknya
+            int stokBaru = stokSekarang - jumlahDiminta;
+            await FirebaseFirestore.instance
+                .collection('gudang_barang')
+                .doc(gudangDoc.id)
+                .update({'jumlah': stokBaru});
+          }
         }
       }
 
+      // Perbarui status laporan permintaan pos
       await FirebaseFirestore.instance
           .collection('laporan_kerusakan')
           .doc(docId)
@@ -82,10 +93,9 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     }
   }
 
-  // FUNGSI YANG DIPERBARUI: Pembatasan Tinggi Card & Zoom Interaktif
   Widget _buildImageWidget(String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty || imageUrl == 'null') {
-      return const SizedBox.shrink(); // Sembunyikan jika tidak ada foto
+      return const SizedBox.shrink(); 
     }
 
     void tampilkanFotoPenuh(Widget imageWidget) {
@@ -124,7 +134,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
       imageContent = Image.network(
         imageUrl,
         width: double.infinity,
-        height: 120, // BATAS TINGGI GAMBAR
+        height: 120,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.broken_image, size: 50, color: Colors.grey),
@@ -144,7 +154,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
         imageContent = Image.memory(
           decodedBytes,
           width: double.infinity,
-          height: 120, // BATAS TINGGI GAMBAR
+          height: 120,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) =>
               const Icon(Icons.broken_image, size: 50, color: Colors.grey),
@@ -235,7 +245,6 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
               String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
               int jumlah = data['jumlah'] ?? 0;
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-              // Ditambahkan pengecekan foto_bukti untuk berjaga-jaga
               String imageUrl = data['imageUrl'] ?? data['foto_bukti'] ?? '';
               Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
@@ -244,7 +253,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
                 shadowColor: Colors.grey.withOpacity(0.3),
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                color: Colors.orange.shade50, // Diberi warna latar tipis untuk variasi
+                color: Colors.orange.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -300,7 +309,6 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
                         ],
                       ),
 
-                      // Panggilan widget gambar
                       _buildImageWidget(imageUrl),
                       
                       const SizedBox(height: 16),

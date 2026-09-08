@@ -1,14 +1,18 @@
-import 'dart:convert'; 
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
 
 class EditBarangScreen extends StatefulWidget {
   final String docId; 
   final Map<String, dynamic> dataLama; 
 
-  const EditBarangScreen({super.key, required this.docId, required this.dataLama, required Map<String, dynamic> barangData});
+  const EditBarangScreen({
+    super.key, 
+    required this.docId, 
+    required this.dataLama,
+  });
 
   @override
   State<EditBarangScreen> createState() => _EditBarangScreenState();
@@ -16,11 +20,11 @@ class EditBarangScreen extends StatefulWidget {
 
 class _EditBarangScreenState extends State<EditBarangScreen> {
   late TextEditingController _namaBarangController;
+  late TextEditingController _kategoriController; 
   late TextEditingController _jumlahController;
-  late String _kategoriTerpilih;
+  late TextEditingController _hargaController;   
   
-  // DITAMBAHKAN: Map untuk menampung controller dari setiap inputan Pos secara dinamis
-  final Map<String, TextEditingController> _posControllers = {};
+  final Map<String, TextEditingController> _atributDinamisControllers = {};
   
   String _imageUrlLama = '';
   Uint8List? _imageBytes; 
@@ -31,18 +35,16 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
   void initState() {
     super.initState();
     _namaBarangController = TextEditingController(text: widget.dataLama['nama'] ?? '');
+    _kategoriController = TextEditingController(text: widget.dataLama['kategori'] ?? ''); 
     _jumlahController = TextEditingController(text: widget.dataLama['jumlah']?.toString() ?? '');
-    
-    List<String> validKategori = ['Alat Pemadam', 'APD (Alat Pelindung Diri)', 'Kendaraan', 'Lainnya'];
-    String kategoriDariDB = widget.dataLama['kategori'] ?? 'Lainnya';
-    _kategoriTerpilih = validKategori.contains(kategoriDariDB) ? kategoriDariDB : 'Lainnya';
+    _hargaController = TextEditingController(text: widget.dataLama['harga']?.toString() ?? '0'); 
     
     _imageUrlLama = widget.dataLama['imageUrl'] ?? '';
 
-    // DITAMBAHKAN: Deteksi otomatis semua field yang berawalan "Pos " dan buatkan Controllernya
+    List<String> fieldUtama = ['nama', 'kategori', 'jumlah', 'harga', 'imageUrl', 'createdAt', 'status'];
     widget.dataLama.forEach((key, value) {
-      if (key.startsWith('Pos ')) {
-        _posControllers[key] = TextEditingController(text: value.toString());
+      if (!fieldUtama.contains(key)) {
+        _atributDinamisControllers[key] = TextEditingController(text: value.toString());
       }
     });
   }
@@ -74,14 +76,29 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
   }
 
   Future<void> _updateBarang() async {
-    if (_namaBarangController.text.trim().isEmpty || _jumlahController.text.trim().isEmpty) {
+    if (_namaBarangController.text.trim().isEmpty || 
+        _kategoriController.text.trim().isEmpty || 
+        _jumlahController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Peringatan: Nama barang dan jumlah harus diisi!'),
+          content: Text('Peringatan: Nama, Kategori, dan Jumlah harus diisi!'),
           backgroundColor: Colors.red,
         ),
       );
       return;
+    }
+
+    int? jumlah = int.tryParse(_jumlahController.text.trim());
+    if (jumlah == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Jumlah stok harus berupa angka!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    double? harga;
+    if (_hargaController.text.trim().isNotEmpty) {
+      harga = double.tryParse(_hargaController.text.trim().replaceAll(RegExp(r'[^0-9.]'), ''));
     }
 
     setState(() => _isLoading = true);
@@ -93,25 +110,27 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
         finalImageBase64 = base64Encode(_imageBytes!);
       }
 
-      // 1. Siapkan data utama yang akan diupdate
       Map<String, dynamic> dataToUpdate = {
         'nama': _namaBarangController.text.trim(),
-        'kategori': _kategoriTerpilih,
-        'jumlah': int.tryParse(_jumlahController.text.trim()) ?? 0,
+        'kategori': _kategoriController.text.trim(), 
+        'jumlah': jumlah,
         'imageUrl': finalImageBase64,
       };
 
-      // 2. DITAMBAHKAN: Masukkan juga semua data Pos yang telah diedit ke dalam map update
-      _posControllers.forEach((key, controller) {
+      if (harga != null && harga > 0) {
+        dataToUpdate['harga'] = harga;
+      } else {
+        dataToUpdate['harga'] = FieldValue.delete();
+      }
+
+      _atributDinamisControllers.forEach((key, controller) {
         if (controller.text.trim().isNotEmpty) {
           dataToUpdate[key] = controller.text.trim();
         } else {
-          // Jika inputan dikosongkan oleh admin, hapus field tersebut dari database
           dataToUpdate[key] = FieldValue.delete();
         }
       });
 
-      // Update semua data (utama + Pos) sekaligus ke Firestore
       await FirebaseFirestore.instance.collection('gudang_barang').doc(widget.docId).update(dataToUpdate);
 
       if (!mounted) return;
@@ -138,9 +157,10 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
   @override
   void dispose() {
     _namaBarangController.dispose();
+    _kategoriController.dispose();
     _jumlahController.dispose();
-    // DITAMBAHKAN: Bersihkan memori controller Pos
-    for (var controller in _posControllers.values) {
+    _hargaController.dispose();
+    for (var controller in _atributDinamisControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -247,31 +267,13 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              value: _kategoriTerpilih,
+            TextField(
+              controller: _kategoriController,
               decoration: const InputDecoration(
-                labelText: 'Kategori Barang',
+                labelText: 'Kategori Barang (Ketik bebas)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.category),
               ),
-              items: <String>[
-                'Alat Pemadam', 
-                'APD (Alat Pelindung Diri)', 
-                'Kendaraan', 
-                'Lainnya'
-              ].map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                setState(() {
-                  if (newValue != null) {
-                    _kategoriTerpilih = newValue;
-                  }
-                });
-              },
             ),
             const SizedBox(height: 20),
             TextField(
@@ -283,36 +285,42 @@ class _EditBarangScreenState extends State<EditBarangScreen> {
                 prefixIcon: Icon(Icons.format_list_numbered),
               ),
             ),
-            
-            // DITAMBAHKAN: Merender list form untuk setiap Pos yang ditemukan
-            if (_posControllers.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            TextField(
+              controller: _hargaController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Harga Satuan (Opsional)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.monetization_on),
+              ),
+            ),
+            if (_atributDinamisControllers.isNotEmpty) ...[
               const SizedBox(height: 30),
               const Divider(thickness: 1.5),
               const SizedBox(height: 10),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Detail Penempatan Pos:', 
+                  'Detail / Penempatan Wilayah:', 
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87)
                 ),
               ),
               const SizedBox(height: 15),
-              
-              ..._posControllers.entries.map((entry) {
+              ..._atributDinamisControllers.entries.map((entry) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 15.0),
                   child: TextField(
                     controller: entry.value,
                     decoration: InputDecoration(
-                      labelText: entry.key, // Akan otomatis bernama "Pos Mako/BKPP", "Pos Limbangan", dll.
+                      labelText: entry.key,
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.location_city, color: Colors.grey),
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ],
-
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,

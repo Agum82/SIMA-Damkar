@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Ditambahkan untuk TextInput.finishAutofillContext()
+import 'package:flutter/services.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +19,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  // Variabel untuk menampung pesan error spesifik per kolom
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void initState() {
@@ -72,17 +76,98 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Future<void> _resetPassword(String email) async {
+    if (email.isEmpty) {
+      setState(() => _emailError = 'Harap masukkan email terlebih dahulu');
+      return;
+    }
+    
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tautan reset password telah dikirim ke email Anda.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengirim email: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _tampilkanDialogLupaPassword(BuildContext context) {
+    final TextEditingController emailResetController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Lupa Password?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Masukkan email yang terdaftar, kami akan mengirimkan tautan untuk mengatur ulang kata sandi.'),
+              const SizedBox(height: 15),
+              TextField(
+                controller: emailResetController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                _resetPassword(emailResetController.text.trim());
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800]),
+              child: const Text('Kirim Tautan', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _login() async {
-    // Beri sinyal ke OS bahwa proses input selesai (memicu pop-up simpan sandi)
     TextInput.finishAutofillContext(); 
 
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      _tampilkanDialog('Email dan password harus diisi!');
-      return;
+    // Reset error sebelum validasi ulang
+    setState(() {
+      _emailError = null;
+      _passwordError = null;
+    });
+
+    bool adaError = false;
+    if (email.isEmpty) {
+      setState(() => _emailError = 'Email harus diisi!');
+      adaError = true;
     }
+    if (password.isEmpty) {
+      setState(() => _passwordError = 'Password harus diisi!');
+      adaError = true;
+    }
+
+    if (adaError) return;
 
     setState(() => _isLoading = true);
 
@@ -109,11 +194,6 @@ class _LoginScreenState extends State<LoginScreen> {
             context,
             MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
           );
-        } else if (role == 'UPT' || role == 'Pos') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const UptDashboardScreen()),
-          );
         } else {
           Navigator.pushReplacement(
             context,
@@ -128,13 +208,20 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
     } on FirebaseAuthException catch (e) {
-      String pesan = 'Gagal masuk.';
-      if (e.code == 'user-not-found') pesan = 'Email tidak terdaftar.';
-      else if (e.code == 'wrong-password') pesan = 'Password salah.';
-      else if (e.code == 'invalid-email') pesan = 'Format email tidak valid.';
-      else pesan = 'Error: ${e.message}';
-      
-      _tampilkanDialog(pesan);
+      setState(() {
+        // Pemetaan error Firebase langsung ke kolom input yang sesuai
+        if (e.code == 'user-not-found' || e.code == 'invalid-email') {
+          _emailError = 'Email tidak terdaftar atau format salah.';
+        } else if (e.code == 'wrong-password') {
+          _passwordError = 'Password yang Anda masukkan salah.';
+        } else if (e.code == 'invalid-credential') {
+          // Firebase versi baru sering menggabungkan error salah email/password menjadi invalid-credential
+          _emailError = 'Periksa kembali email atau password Anda.';
+          _passwordError = 'Periksa kembali email atau password Anda.';
+        } else {
+          _tampilkanDialog('Error: ${e.message}');
+        }
+      });
     } catch (e) {
       _tampilkanDialog('Error: $e');
     } finally {
@@ -149,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: AutofillGroup( // 1. MENGGUNAKAN AutofillGroup
+          child: AutofillGroup(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -159,27 +246,31 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Text('Dinas Pemadam Kebakaran Kab. Garut', style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 40),
 
+                // TEXTFIELD EMAIL DENGAN ERROR TEXT
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email], // 2. HINT UNTUK EMAIL
-                  decoration: const InputDecoration(
+                  autofillHints: const [AutofillHints.email],
+                  decoration: InputDecoration(
                     labelText: 'Email', 
-                    border: OutlineInputBorder(), 
-                    prefixIcon: Icon(Icons.email)
+                    border: const OutlineInputBorder(), 
+                    prefixIcon: const Icon(Icons.email),
+                    errorText: _emailError, // <-- Garis dan teks merah muncul di sini jika ada error
                   ),
                 ),
                 const SizedBox(height: 15),
 
+                // TEXTFIELD PASSWORD DENGAN ERROR TEXT
                 TextField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  autofillHints: const [AutofillHints.password], // 3. HINT UNTUK PASSWORD
-                  onEditingComplete: () => _login(), // Tekan Enter di keyboard langsung login
+                  autofillHints: const [AutofillHints.password],
+                  onEditingComplete: () => _login(),
                   decoration: InputDecoration(
                     labelText: 'Password',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.lock),
+                    errorText: _passwordError, // <-- Garis dan teks merah muncul di sini jika ada error
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -188,6 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 25),
 
+                // TOMBOL MASUK
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -199,8 +291,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 10),
 
+                // TOMBOL LUPA PASSWORD
+                TextButton(
+                  onPressed: () => _tampilkanDialogLupaPassword(context),
+                  child: Text(
+                    'Lupa Password?',
+                    style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w600),
+                  ),
+                ),
+
+                // TOMBOL DAFTAR
                 TextButton(
                   onPressed: () => Navigator.push(
                     context,

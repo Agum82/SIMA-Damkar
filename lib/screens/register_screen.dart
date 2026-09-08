@@ -17,15 +17,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
-  // DEFAULT ROLE diatur ke UPT, bukan Admin
   String _roleTerpilih = 'UPT'; 
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  // Variabel tambahan untuk fitur foto profil
   File? _imageFile;
 
-  // Fungsi untuk memilih gambar dari galeri
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
@@ -93,7 +90,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
+      
       String uid = userCredential.user!.uid;
       String downloadUrl = '';
 
@@ -110,7 +107,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'nama': _namaController.text.trim(),
         'email': _emailController.text.trim(),
         'role': _roleTerpilih,
-        'photoUrl': downloadUrl, // Menyimpan URL foto profil
+        'photoUrl': downloadUrl,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -122,9 +119,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (e.code == 'weak-password') pesan = 'Password terlalu lemah (minimal 6 karakter).';
       else if (e.code == 'email-already-in-use') pesan = 'Email ini sudah terdaftar.';
       else if (e.code == 'invalid-email') pesan = 'Format email tidak valid.';
-      else pesan = 'Firebase Auth Error (${e.code}): ${e.message}';
+      else pesan = 'Auth Error (${e.code}): ${e.message}';
       
       _tampilkanDialog(pesan);
+    } on FirebaseException catch (e) {
+      // Menangkap error khusus Storage atau Firestore
+      _tampilkanDialog('Database/Storage Error: ${e.message}');
     } catch (e) {
       _tampilkanDialog('Error: $e');
     } finally {
@@ -149,7 +149,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Bagian Foto Profil yang bisa diklik untuk memilih gambar
               Center(
                 child: GestureDetector(
                   onTap: _pickImage,
@@ -230,7 +229,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   border: OutlineInputBorder(), 
                   prefixIcon: Icon(Icons.badge)
                 ),
-                // Opsi 'Admin' dihapus dari daftar. Sekarang hanya ada UPT dan Pos.
                 items: ['UPT', 'Pos'].map((role) => DropdownMenuItem(value: role, child: Text(role))).toList(),
                 onChanged: (value) => setState(() => _roleTerpilih = value!),
               ),

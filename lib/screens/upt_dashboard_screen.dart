@@ -21,6 +21,7 @@ class _UptDashboardScreenState extends State<UptDashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        automaticallyImplyLeading: false, // <-- Kode ditambahkan di sini untuk menghilangkan panah
         title: const Text('Dashboard'),
         centerTitle: true,
         backgroundColor: Colors.red[800],

@@ -49,6 +49,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
     );
   }
 
+  // FUNGSI UTAMA: Sinkronisasi Stok Gudang Secara Presisi untuk UPT
   Future<void> _updateStatusPermintaan(
       String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
     try {
@@ -60,14 +61,22 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
 
         if (gudangQuery.docs.isNotEmpty) {
           var gudangDoc = gudangQuery.docs.first;
-          int stokSekarang = gudangDoc['jumlah'] ?? 0;
-          int stokBaru = stokSekarang - jumlahDiminta;
-          if (stokBaru < 0) stokBaru = 0;
+          int stokSekarang = gudangDoc.data()['jumlah'] ?? 0;
 
-          await FirebaseFirestore.instance
-              .collection('gudang_barang')
-              .doc(gudangDoc.id)
-              .update({'jumlah': stokBaru});
+          if (stokSekarang <= jumlahDiminta) {
+            // Jika stok habis atau pas dengan jumlah yang diminta, hapus dokumen barang dari gudang
+            await FirebaseFirestore.instance
+                .collection('gudang_barang')
+                .doc(gudangDoc.id)
+                .delete();
+          } else {
+            // Jika stok masih bersisa, kurangi jumlah stoknya
+            int stokBaru = stokSekarang - jumlahDiminta;
+            await FirebaseFirestore.instance
+                .collection('gudang_barang')
+                .doc(gudangDoc.id)
+                .update({'jumlah': stokBaru});
+          }
         }
       }
 
@@ -83,13 +92,11 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
     }
   }
 
-  // FUNGSI YANG DIPERBARUI: Pembatasan Tinggi Card & Zoom Interaktif
   Widget _buildImageWidget(String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty || imageUrl == 'null') {
-      return const SizedBox.shrink(); // Sembunyikan jika tidak ada foto
+      return const SizedBox.shrink(); 
     }
 
-    // Fungsi pop-up gambar interaktif (Zoom)
     void tampilkanFotoPenuh(Widget imageWidget) {
       showDialog(
         context: context,
@@ -111,7 +118,6 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                 child: IconButton(
                   icon: const Icon(Icons.close, color: Colors.white, size: 30),
                   onPressed: () => Navigator.pop(context),
-                  // Background hitam transparan agar tombol silang lebih jelas
                   style: IconButton.styleFrom(backgroundColor: Colors.black54),
                 ),
               ),
@@ -123,19 +129,17 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
 
     Widget imageContent;
 
-    // Cek apakah gambar berupa URL internet atau Base64
     if (imageUrl.startsWith('http')) {
       imageContent = Image.network(
         imageUrl,
         width: double.infinity,
-        height: 120, // BATAS TINGGI GAMBAR (Mencegah Card Kebesaran)
+        height: 120, 
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.broken_image, size: 50, color: Colors.grey),
       );
     } else {
       try {
-        // Pembersihan Data Base64
         String cleanBase64 = imageUrl.replaceAll(RegExp(r'\s+'), '');
         if (cleanBase64.contains(',')) {
           cleanBase64 = cleanBase64.split(',').last;
@@ -149,7 +153,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
         imageContent = Image.memory(
           decodedBytes,
           width: double.infinity,
-          height: 120, // BATAS TINGGI GAMBAR (Mencegah Card Kebesaran)
+          height: 120, 
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) =>
               const Icon(Icons.broken_image, size: 50, color: Colors.grey),
@@ -159,10 +163,8 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
       }
     }
 
-    // Tampilan Gambar di dalam Card
     return InkWell(
       onTap: () {
-        // Render ulang gambar tanpa batas tinggi untuk pop-up
         Widget fullImage = imageUrl.startsWith('http')
             ? Image.network(imageUrl)
             : Image.memory(base64Decode(_cleanBase64(imageUrl)));
@@ -180,7 +182,6 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
     );
   }
 
-  // Helper untuk membersihkan base64 saat dipanggil di zoom
   String _cleanBase64(String base64String) {
     String cleaned = base64String.replaceAll(RegExp(r'\s+'), '');
     if (cleaned.contains(',')) cleaned = cleaned.split(',').last;
@@ -243,7 +244,6 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
               String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
               int jumlah = data['jumlah'] ?? 0;
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-              // Ubah 'imageUrl' ke default sesuai database Anda (kadang pakai 'foto_bukti')
               String imageUrl = data['imageUrl'] ?? data['foto_bukti'] ?? '';
               Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
@@ -252,7 +252,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                 shadowColor: Colors.grey.withOpacity(0.3),
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                color: Colors.red.shade50, // Latar belakang Card agak kemerahan (opsional)
+                color: Colors.red.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -307,7 +307,6 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
                         ],
                       ),
                       
-                      // PANGGIL WIDGET GAMBAR DI SINI
                       _buildImageWidget(imageUrl),
                       
                       const SizedBox(height: 16),

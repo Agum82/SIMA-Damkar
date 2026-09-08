@@ -13,18 +13,12 @@ class TambahBarangScreen extends StatefulWidget {
 
 class _TambahBarangScreenState extends State<TambahBarangScreen> {
   final TextEditingController _namaController = TextEditingController();
+  final TextEditingController _kategoriController = TextEditingController(); // <-- Diubah menjadi text controller agar bisa diketik bebas
   final TextEditingController _jumlahController = TextEditingController();
-  String _kategoriTerpilih = 'Alat Pemadam';
+  final TextEditingController _hargaController = TextEditingController(); // <-- Kolom baru untuk Harga Satuan
+  
   String _imageBase64 = '';
   bool _isLoading = false;
-
-  final List<String> _kategoriList = [
-    'Alat Pemadam',
-    'APD',
-    'Selang & Aksesoris',
-    'Kendaraan',
-    'Lainnya',
-  ];
 
   // Fungsi untuk memilih gambar dan mengubahnya ke Base64
   Future<void> _pickImage() async {
@@ -78,8 +72,11 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
 
   // Fungsi untuk menyimpan data barang ke Firestore
   Future<void> _simpanDataBarang() async {
-    if (_namaController.text.trim().isEmpty || _jumlahController.text.trim().isEmpty) {
-      _tampilkanDialog('Nama barang dan jumlah harus diisi!');
+    if (_namaController.text.trim().isEmpty || 
+        _kategoriController.text.trim().isEmpty || 
+        _jumlahController.text.trim().isEmpty || 
+        _hargaController.text.trim().isEmpty) {
+      _tampilkanDialog('Semua kolom (Nama, Kategori, Jumlah, Harga) harus diisi!');
       return;
     }
 
@@ -89,13 +86,20 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
       return;
     }
 
+    double? harga = double.tryParse(_hargaController.text.trim().replaceAll(RegExp(r'[^0-9.]'), ''));
+    if (harga == null) {
+      _tampilkanDialog('Harga satuan harus berupa angka yang valid!');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       await FirebaseFirestore.instance.collection('gudang_barang').add({
         'nama': _namaController.text.trim(),
-        'kategori': _kategoriTerpilih,
+        'kategori': _kategoriController.text.trim(), // Menyimpan kategori teks bebas
         'jumlah': jumlah,
+        'harga': harga, // Menyimpan nilai harga satuan
         'status': 'Baik',
         'imageUrl': _imageBase64,
         'createdAt': FieldValue.serverTimestamp(),
@@ -173,36 +177,37 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
             ),
             const SizedBox(height: 15),
 
-            // Dropdown Kategori
-            DropdownButtonFormField<String>(
-              value: _kategoriTerpilih,
+            // Input Kategori (Bisa diketik bebas)
+            TextField(
+              controller: _kategoriController,
               decoration: const InputDecoration(
-                labelText: 'Kategori Barang',
+                labelText: 'Kategori Barang (Ketik bebas)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.category),
               ),
-              items: _kategoriList.map((kategori) {
-                return DropdownMenuItem(
-                  value: kategori,
-                  child: Text(kategori),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _kategoriTerpilih = value!;
-                });
-              },
             ),
             const SizedBox(height: 15),
 
-            // Input Jumlah
+            // Input Jumlah Stok
             TextField(
               controller: _jumlahController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: 'Jumlah',
+                labelText: 'Jumlah Stok',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.format_list_numbered),
+              ),
+            ),
+            const SizedBox(height: 15),
+
+            // Input Harga Satuan
+            TextField(
+              controller: _hargaController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Harga Satuan (Contoh: 37407000)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.monetization_on),
               ),
             ),
             const SizedBox(height: 30),
@@ -228,7 +233,7 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
             ),
             const SizedBox(height: 15),
 
-            // Tombol Persegi Kembali ke Dashboard
+            // Tombol Kembali ke Dashboard
             SizedBox(
               height: 50,
               child: ElevatedButton(

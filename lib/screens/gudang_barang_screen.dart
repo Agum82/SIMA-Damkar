@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; 
 import 'edit_barang_screen.dart';
 
 class GudangBarangScreen extends StatefulWidget {
@@ -79,6 +80,11 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
   void _tampilkanDetailBarang(String docId, Map<String, dynamic> data) {
     String imageUrl = data['imageUrl'] ?? '';
     
+    // Format Harga ke Mata Uang Rupiah (Hanya diproses jika ada data harga)
+    final formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    double hargaVal = double.tryParse(data['harga']?.toString() ?? '0') ?? 0.0;
+    String formattedHarga = formatRupiah.format(hargaVal);
+
     List<Widget> detailWidgets = [
       _buildDetailRow('Nama Barang', data['nama']?.toString() ?? '-'),
       const Divider(height: 12),
@@ -86,11 +92,20 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
       const Divider(height: 12),
       _buildDetailRow('Jumlah Stok', '${data['jumlah'] ?? 0} Unit'),
       const Divider(height: 12),
-      _buildDetailRow('Status', data['status']?.toString() ?? '-'),
-      const Divider(height: 12),
     ];
 
-    List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'status', 'imageUrl', 'createdAt', 'updatedAt', 'detail'];
+    // HANYA tampilkan baris Harga Satuan jika harganya ada dan di atas 0
+    if (hargaVal > 0) {
+      detailWidgets.addAll([
+        _buildDetailRow('Harga Satuan', formattedHarga),
+        const Divider(height: 12),
+      ]);
+    }
+
+    detailWidgets.add(_buildDetailRow('Status', data['status']?.toString() ?? '-'));
+    detailWidgets.add(const Divider(height: 12));
+
+    List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'harga', 'status', 'imageUrl', 'createdAt', 'updatedAt', 'detail'];
     bool hasExtraDetails = false;
 
     data.forEach((key, value) {
@@ -148,7 +163,7 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => EditBarangScreen(docId: docId, dataLama: data, barangData: {})));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => EditBarangScreen(docId: docId, dataLama: data)));
             },
             icon: const Icon(Icons.edit, size: 16),
             label: const Text('Edit'),
@@ -227,7 +242,6 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
               ),
               Expanded(
                 child: ListView.builder(
-                  // PADDING BAWAH 80 DISET DI SINI AGAR TIDAK TERTUTUP TOMBOL NAVIGASI BAWAH HP
                   padding: const EdgeInsets.fromLTRB(10, 6, 10, 80),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
@@ -239,7 +253,6 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
                     String kategori = data['kategori'] ?? 'Lainnya';
                     String namaAsli = data['nama'] ?? 'Tanpa Nama';
                     
-                    // MENYUSUN NAMA KENDARAAN AGAR LEBIH SPESIFIK DI KARTU
                     String displayNama = namaAsli;
                     if (kategori == 'Kendaraan') {
                       String merk = data['Merk / Tipe'] ?? '';
