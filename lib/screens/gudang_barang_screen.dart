@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; 
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'edit_barang_screen.dart';
 
 class GudangBarangScreen extends StatefulWidget {
@@ -77,10 +81,98 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
     );
   }
 
+  // Fungsi untuk Mencetak PDF Seluruh Barang beserta Detail Penempatannya
+  Future<void> _cetakPdfSemuaBarang(List<QueryDocumentSnapshot> docs) async {
+    final pdf = pw.Document();
+
+    Set<String> dynamicKeys = {};
+    List<Map<String, dynamic>> parsedDataList = [];
+    List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'harga', 'status', 'imageUrl', 'createdAt', 'updatedAt', 'detail', 'Merk / Tipe', 'Nomor Kendaraan'];
+
+    for (var doc in docs) {
+      var data = doc.data() as Map<String, dynamic>;
+      parsedDataList.add(data);
+      data.forEach((key, value) {
+        if (!excludeKeys.contains(key) && value != null && value.toString().isNotEmpty && value.toString() != '-') {
+          dynamicKeys.add(key);
+        }
+      });
+    }
+
+    List<String> sortedKeys = dynamicKeys.toList()..sort();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(20),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('PEMADAM KEBAKARAN KABUPATEN GARUT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Laporan Keseluruhan Stok Gudang & Penempatan Prasarana', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            pw.SizedBox(height: 10),
+          ],
+        ),
+        build: (context) {
+          List<pw.Widget> headers = [
+            pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('No', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+            pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('Nama Barang', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+            pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('Kategori', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+            pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9))),
+          ];
+
+          for (var key in sortedKeys) {
+            headers.add(pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(key, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8))));
+          }
+
+          List<List<pw.Widget>> rows = [];
+          for (int i = 0; i < parsedDataList.length; i++) {
+            var data = parsedDataList[i];
+            List<pw.Widget> row = [
+              pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('${i + 1}', style: const pw.TextStyle(fontSize: 8))),
+              pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(data['nama']?.toString() ?? '-', style: const pw.TextStyle(fontSize: 8))),
+              pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(data['kategori']?.toString() ?? '-', style: const pw.TextStyle(fontSize: 8))),
+              pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('${data['jumlah'] ?? 0}', style: const pw.TextStyle(fontSize: 8))),
+            ];
+
+            for (var key in sortedKeys) {
+              String val = data[key]?.toString() ?? '-';
+              row.add(pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(val, style: const pw.TextStyle(fontSize: 8))));
+            }
+            rows.add(row);
+          }
+
+          return [
+            pw.Table.fromTextArray(
+              headers: headers.map((e) => e is pw.Padding ? e.child : e).toList(),
+              data: rows.map((row) => row.map((e) => e is pw.Padding ? e.child : e).map((w) => w is pw.Text ? w.text : '').toList()).toList(),
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.white),
+              headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFB71C1C)),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              cellAlignment: pw.Alignment.centerLeft,
+            ),
+          ];
+        },
+        footer: (context) => pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('Dicetak otomatis dari Sistem SIMA Damkar', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+            pw.Text('Halaman ${context.pageNumber} dari ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+          ],
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Laporan_Gudang_Damkar_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+    );
+  }
+
   void _tampilkanDetailBarang(String docId, Map<String, dynamic> data) {
     String imageUrl = data['imageUrl'] ?? '';
     
-    // Format Harga ke Mata Uang Rupiah (Hanya diproses jika ada data harga)
     final formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     double hargaVal = double.tryParse(data['harga']?.toString() ?? '0') ?? 0.0;
     String formattedHarga = formatRupiah.format(hargaVal);
@@ -94,7 +186,6 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
       const Divider(height: 12),
     ];
 
-    // HANYA tampilkan baris Harga Satuan jika harganya ada dan di atas 0
     if (hargaVal > 0) {
       detailWidgets.addAll([
         _buildDetailRow('Harga Satuan', formattedHarga),
@@ -214,6 +305,13 @@ class _GudangBarangScreenState extends State<GudangBarangScreen> {
             elevation: 1,
             leading: _isSelectionMode ? IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() { _selectedDocIds.clear(); _isSelectionMode = false; })) : null,
             actions: [
+              // Tombol Cetak PDF Seluruh Gudang Lengkap dengan Detail Penempatan
+              if (!_isSelectionMode)
+                IconButton(
+                  icon: const Icon(Icons.print, size: 20),
+                  tooltip: 'Cetak Laporan Lengkap',
+                  onPressed: () => _cetakPdfSemuaBarang(docs),
+                ),
               if (_isSelectionMode) ...[
                 IconButton(
                   icon: Icon(_selectedDocIds.length == docs.length && docs.isNotEmpty ? Icons.deselect : Icons.select_all, size: 20),

@@ -63,10 +63,9 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
     }
   }
 
-  // FUNGSI YANG DIPERBARUI: Pembatasan Tinggi Card & Zoom Interaktif
   Widget _buildImageWidget(String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty || imageUrl == 'null') {
-      return const SizedBox.shrink(); // Sembunyikan ruang kosong jika tidak ada foto
+      return const SizedBox.shrink(); 
     }
 
     void tampilkanFotoPenuh(Widget imageWidget) {
@@ -105,7 +104,7 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
       imageContent = Image.network(
         imageUrl,
         width: double.infinity,
-        height: 120, // BATAS TINGGI GAMBAR
+        height: 120,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.broken_image, size: 50, color: Colors.grey),
@@ -125,7 +124,7 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
         imageContent = Image.memory(
           decodedBytes,
           width: double.infinity,
-          height: 120, // BATAS TINGGI GAMBAR
+          height: 120,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) =>
               const Icon(Icons.broken_image, size: 50, color: Colors.grey),
@@ -176,6 +175,7 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // Tanpa orderBy di kueri agar tidak memerlukan index Firestore
         stream: FirebaseFirestore.instance
             .collection('laporan_kerusakan')
             .where('tingkatKerusakan', isEqualTo: 'Berat')
@@ -199,6 +199,14 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
             return status == 'Menunggu';
           }).toList();
 
+          // Mengurutkan data secara otomatis di Dart (Terbaru di Atas)
+          daftarRusakBerat.sort((a, b) {
+            Timestamp? tA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            Timestamp? tB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            if (tA == null || tB == null) return 0;
+            return tB.compareTo(tA);
+          });
+
           if (daftarRusakBerat.isEmpty) {
             return _buildEmptyStateAllProcessed();
           }
@@ -213,7 +221,6 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
               String namaBarang = data['namaBarang'] ?? 'Tanpa Nama';
               String jumlah = data['jumlah']?.toString() ?? '0';
               String keterangan = data['keterangan'] ?? 'Tidak ada keterangan';
-              // Pengecekan field gambar (imageUrl atau foto_bukti)
               String imageUrl = data['imageUrl'] ?? data['foto_bukti'] ?? ''; 
               String status = data['status'] ?? 'Menunggu'; 
               String namaPelanggan = data['namaPelanggan'] ?? 'UPT / Pos Tidak Diketahui';
@@ -224,7 +231,7 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
                 shadowColor: Colors.grey.withOpacity(0.3),
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                color: Colors.deepOrange.shade50, // Latar disesuaikan untuk kerusakan berat
+                color: Colors.deepOrange.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -278,7 +285,6 @@ class _KerusakanBeratScreenState extends State<KerusakanBeratScreen> {
                         ],
                       ),
 
-                      // Panggilan widget gambar
                       _buildImageWidget(imageUrl),
                       
                       const SizedBox(height: 16),

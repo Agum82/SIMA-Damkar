@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
 class BarangRusakScreen extends StatefulWidget {
   const BarangRusakScreen({super.key});
@@ -27,9 +27,9 @@ class _BarangRusakScreenState extends State<BarangRusakScreen> {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
+        maxWidth: 500, // Diperkecil sedikit agar hemat teks Base64
+        maxHeight: 500,
+        imageQuality: 60,
       );
 
       if (pickedFile != null) {
@@ -60,16 +60,12 @@ class _BarangRusakScreenState extends State<BarangRusakScreen> {
     setState(() => _isLoading = true);
 
     try {
-      String imageUrl = '';
+      String imageBase64 = '';
 
-      // 1. Upload Foto ke Firebase Storage (Jika dilampirkan)
+      // 1. Konversi foto ke teks Base64 jika dilampirkan
       if (_imageFile != null) {
-        String fileName = 'laporan_rusak_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        Reference storageRef = FirebaseStorage.instance.ref().child('laporan_kerusakan_images/$fileName');
-        
-        UploadTask uploadTask = storageRef.putFile(_imageFile!);
-        TaskSnapshot snapshot = await uploadTask;
-        imageUrl = await snapshot.ref.getDownloadURL();
+        List<int> imageBytes = await _imageFile!.readAsBytes();
+        imageBase64 = base64Encode(imageBytes);
       }
 
       // 2. Simpan Data Laporan ke Firestore
@@ -78,7 +74,7 @@ class _BarangRusakScreenState extends State<BarangRusakScreen> {
         'jumlah': int.tryParse(_jumlahRusakController.text.trim()) ?? 0,
         'keterangan': _keteranganController.text.trim(),
         'tingkatKerusakan': _tingkatKerusakan, // 'Sedang' atau 'Berat'
-        'imageUrl': imageUrl,
+        'imageUrl': imageBase64, // Disimpan sebagai Base64
         'status': 'Menunggu', // Status default saat pertama kali dilapor
         'createdAt': FieldValue.serverTimestamp(),
       });

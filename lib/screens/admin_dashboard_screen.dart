@@ -1,14 +1,13 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:local_notifier/local_notifier.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-
-import 'admin_profile_screen.dart'; 
+import 'admin_profile_screen.dart';
 import 'tambah_barang_screen.dart';
 import 'gudang_barang_screen.dart';
 import 'riwayat_admin_screen.dart';
@@ -25,388 +24,178 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  bool _isImporting = false;
-  bool _isInitialLoad = true;
+  final User? user = FirebaseAuth.instance.currentUser;
+  
+  String _photoUrl = '';
 
   @override
   void initState() {
     super.initState();
-    _pantauLaporanBaru();
+    _ambilDataProfilAdmin();
   }
 
-  void _pantauLaporanBaru() {
-    FirebaseFirestore.instance
-        .collection('laporan_kerusakan')
-        .snapshots()
-        .listen((snapshot) {
-          
-      if (_isInitialLoad) {
-        _isInitialLoad = false;
-        return; 
-      }
-
-      for (var change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final data = change.doc.data() ?? {};
-          
-          String pengaju = data['namaPelanggan'] ?? 'UPT / Pos';
-          String barang = data['namaBarang'] ?? 'Barang';
-          String tingkat = data['tingkatKerusakan'] ?? '';
-          
-          String titleNotif = '';
-          String bodyNotif = '';
-
-          if (tingkat == 'Pengajuan Baru') {
-            titleNotif = "Ada Permintaan Baru!";
-            bodyNotif = "$pengaju telah mengirim permintaan untuk $barang.";
-          } else {
-            titleNotif = "Ada Laporan Kerusakan $tingkat Terbaru!";
-            bodyNotif = "$pengaju melaporkan kendala pada $barang.";
+  Future<void> _ambilDataProfilAdmin() async {
+    if (user != null) {
+      try {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+        if (userDoc.exists) {
+          var data = userDoc.data() as Map<String, dynamic>;
+          if (mounted) {
+            setState(() {
+              _photoUrl = data['photoUrl'] ?? '';
+            });
           }
-
-          LocalNotification notification = LocalNotification(
-            title: titleNotif,
-            body: bodyNotif,
-          );
-          
-          notification.show();
         }
+      } catch (e) {
+        // Abaikan error jaringan
       }
-    });
+    }
   }
 
-  void _logout(BuildContext context) {
-    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+  ImageProvider? _getAvatarImage() {
+    if (_photoUrl.isEmpty) return null;
+    
+    if (_photoUrl.startsWith('http')) {
+      return NetworkImage(_photoUrl);
+    } 
+    
+    try {
+      Uint8List decodedBytes = base64Decode(_photoUrl);
+      return MemoryImage(decodedBytes);
+    } catch (e) {
+      return null;
+    }
   }
 
-  void _tampilkanDialog(String pesan, {bool isBerhasil = false}) {
+  // Fungsi Langsung Cetak PDF dari Dashboard Admin
+  Future<void> _cetakPdfDariDashboard() async {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Row(
-          children: [
-            Icon(isBerhasil ? Icons.check_circle : Icons.error, color: isBerhasil ? Colors.green : Colors.red[800]),
-            const SizedBox(width: 10),
-            Text(isBerhasil ? 'Berhasil' : 'Peringatan'),
-          ],
-        ),
-        content: Text(pesan, style: const TextStyle(fontSize: 16)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-        ],
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.red),
       ),
     );
-  }
 
-  List<String> _parseCsvLine(String line, String separator) {
-    List<String> cols = [];
-    bool inQuotes = false;
-    String currentCol = '';
-    for (int c = 0; c < line.length; c++) {
-      String char = line[c];
-      if (char == '"') {
-        inQuotes = !inQuotes;
-      } else if (char == separator && !inQuotes) {
-        cols.add(currentCol.replaceAll('"', '').trim());
-        currentCol = '';
-      } else {
-        currentCol += char;
-      }
-    }
-    cols.add(currentCol.replaceAll('"', '').trim());
-    return cols;
-  }
-
-  Future<void> _importDataToFirestore() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom, 
-        allowedExtensions: ['csv'] 
-      );
-      
-      if (result == null) return;
-      
-      setState(() => _isImporting = true);
-      int totalImported = 0;
-
-      String content = result.files.single.bytes != null 
-          ? utf8.decode(result.files.single.bytes!) 
-          : await File(result.files.single.path!).readAsString();
-
-      List<String> lines = content.split(RegExp(r'\r\n|\n|\r'));
-      String separator = lines.isNotEmpty && lines[0].contains(';') ? ';' : ',';
-
-      int headerIndex = -1;
-      List<String> headers = [];
-      for (int i = 0; i < lines.length; i++) {
-        String lowerLine = lines[i].toLowerCase();
-        if ((lowerLine.contains('nama barang') || lowerLine.contains('jenis barang') || lowerLine.contains('nama')) && lowerLine.contains('no')) {
-          headerIndex = i;
-          headers = _parseCsvLine(lines[i], separator);
-          break;
-        }
-      }
-
-      if (headerIndex == -1) {
-        for (int i = 0; i < lines.length; i++) {
-          String lowerLine = lines[i].toLowerCase();
-          if (lowerLine.contains('nama barang') || lowerLine.contains('jenis barang') || lowerLine.contains('nama')) {
-            headerIndex = i;
-            headers = _parseCsvLine(lines[i], separator);
-            break;
-          }
-        }
-      }
-
-      if (headerIndex == -1) headerIndex = 0;
-
-      for (int i = headerIndex + 1; i < lines.length; i++) {
-        String lineStr = lines[i].trim();
-        if (lineStr.isEmpty) continue;
-
-        List<String> cols = _parseCsvLine(lineStr, separator);
-        if (cols.length < 2) continue;
-        String namaBarang = '';
-        
-
-        if (int.tryParse(cols[0].trim()) != null && cols.length > 1) {
-          namaBarang = cols[1].trim();
-          
-        } else {
-          namaBarang = cols[0].trim();
-          
-        }
-
-        String lowerNama = namaBarang.toLowerCase();
-        if (namaBarang.isEmpty || 
-            lowerNama.contains('garut') || 
-            lowerNama.contains('kepala') || 
-            lowerNama.contains('catatan') ||
-            lowerNama.contains('nip.') ||
-            lowerNama.contains('bid pencegahan') ||
-            lowerNama.contains('kabid ops') ||
-            (int.tryParse(namaBarang) != null && namaBarang.length < 3)) {
-          continue;
-        }
-
-        Map<String, String> rowMap = {};
-        for (int h = 0; h < headers.length; h++) {
-          String key = headers[h].trim().isEmpty ? 'Kolom_$h' : headers[h].trim();
-          String val = h < cols.length ? cols[h].trim() : '';
-          rowMap[key] = val;
-        }
-
-        String kategori = 'Peralatan Umum';
-        for (var entry in rowMap.entries) {
-          String k = entry.key.toLowerCase();
-          if (k.contains('rekening') || k.contains('kategori') || k.contains('penyusun') || k.contains('kelompok')) {
-            if (!k.contains('pengadaan') && !k.contains('jumlah') && !k.contains('stok') && !k.contains('sisa')) {
-              if (entry.value.isNotEmpty && entry.value != '-') {
-                kategori = entry.value;
-                break;
-              }
-            }
-          }
-        }
-        if (content.toLowerCase().contains('kendaraan') && kategori == 'Peralatan Umum') {
-          kategori = 'Kendaraan';
-        }
-
-        int jumlahStok = 1;
-        for (var entry in rowMap.entries) {
-          String k = entry.key.toLowerCase();
-          if (k.contains('pengadaan') || k.contains('kuantitas') || k == 'jumlah' || k.contains('stok')) {
-            double? parsedVal = double.tryParse(entry.value.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), ''));
-            if (parsedVal != null && parsedVal > 0) {
-              jumlahStok = parsedVal.toInt();
-              break;
-            }
-          }
-        }
-        if (jumlahStok == 1 && cols.length > 2) {
-          int? col2Val = int.tryParse(cols[2].replaceAll(RegExp(r'[^0-9]'), ''));
-          if (col2Val != null && col2Val > 0) jumlahStok = col2Val;
-        }
-
-        double hargaSatuan = 0.0;
-        for (var entry in rowMap.entries) {
-          String k = entry.key.toLowerCase();
-          if (k.contains('harga') || k.contains('satuan')) {
-            if (!k.contains('total') && !k.contains('jumlah')) {
-              String cleanH = entry.value.replaceAll(',', '').trim();
-              double? parsedH = double.tryParse(cleanH);
-              if (parsedH != null) {
-                hargaSatuan = parsedH;
-                break;
-              }
-            }
-          }
-        }
-
-        Map<String, dynamic> dataUpload = {
-          'nama': namaBarang,
-          'kategori': kategori,
-          'jumlah': jumlahStok,
-          'status': 'Tersedia',
-          'createdAt': FieldValue.serverTimestamp(),
-        };
-
-        if (hargaSatuan > 0) {
-          dataUpload['harga'] = hargaSatuan;
-        }
-
-        rowMap.forEach((k, v) {
-          String lowerK = k.toLowerCase();
-          if (!lowerK.contains('nama') && 
-              !lowerK.contains('jenis barang') && 
-              !lowerK.contains('no') && 
-              v.isNotEmpty) {
-            dataUpload[k] = v;
-          }
-        });
-
-        await FirebaseFirestore.instance.collection('gudang_barang').add(dataUpload);
-        totalImported++;
-      }
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('gudang_barang').orderBy('createdAt', descending: true).get();
+      List<QueryDocumentSnapshot> docs = snapshot.docs;
 
       if (!mounted) return;
-      _tampilkanDialog('Berhasil mengimpor $totalImported data secara akurat sesuai file!', isBerhasil: true);
-    } catch (e) {
-      if (mounted) _tampilkanDialog('Gagal mengimpor file. Pastikan format file benar.\nDetail Error: $e');
-    } finally {
-      if (mounted) setState(() => _isImporting = false);
-    }
-  }
+      Navigator.pop(context); // Tutup loading
 
-  // Fungsi untuk mencetak semua barang di gudang ke PDF / Printer
-  Future<void> _cetakSemuaBarang() async {
-    try {
-      setState(() => _isImporting = true);
-      
-      // Ambil seluruh data dari koleksi gudang_barang
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('gudang_barang')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      if (snapshot.docs.isEmpty) {
-        if (mounted) _tampilkanDialog('Tidak ada data barang di gudang untuk dicetak.');
+      if (docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tidak ada data barang di gudang untuk dicetak!'), backgroundColor: Colors.orange),
+        );
         return;
       }
 
       final pdf = pw.Document();
 
+      Set<String> dynamicKeys = {};
+      List<Map<String, dynamic>> parsedDataList = [];
+      List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'harga', 'status', 'imageUrl', 'createdAt', 'updatedAt', 'detail', 'Merk / Tipe', 'Nomor Kendaraan'];
+
+      for (var doc in docs) {
+        var data = doc.data() as Map<String, dynamic>;
+        parsedDataList.add(data);
+        data.forEach((key, value) {
+          if (!excludeKeys.contains(key) && value != null && value.toString().isNotEmpty && value.toString() != '-') {
+            dynamicKeys.add(key);
+          }
+        });
+      }
+
+      List<String> sortedKeys = dynamicKeys.toList()..sort();
+
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(24),
-          build: (pw.Context context) {
-            return [
-              pw.Header(
-                level: 0,
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('PEMADAM KEBAKARAN KABUPATEN GARUT', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Laporan Stok Gudang', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-                  ],
-                ),
-              ),
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(20),
+          header: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('PEMADAM KEBAKARAN KABUPATEN GARUT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Laporan Keseluruhan Stok Gudang & Penempatan Prasarana', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
               pw.SizedBox(height: 10),
-              pw.Text('DAFTAR KESELURUHAN BARANG GUDANG PRASARANA', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 15),
+            ],
+          ),
+          build: (context) {
+            List<String> headers = ['No', 'Nama Barang', 'Kategori', 'Jumlah Stok', 'Status'];
+            for (var key in sortedKeys) {
+              headers.add(key);
+            }
+
+            List<List<String>> rows = [];
+            for (int i = 0; i < parsedDataList.length; i++) {
+              var data = parsedDataList[i];
+              List<String> row = [
+                '${i + 1}',
+                data['nama']?.toString() ?? '-',
+                data['kategori']?.toString() ?? '-',
+                '${data['jumlah'] ?? 0} Unit',
+                data['status']?.toString() ?? 'Tersedia',
+              ];
+
+              for (var key in sortedKeys) {
+                String val = data[key]?.toString() ?? '-';
+                row.add(val);
+              }
+              rows.add(row);
+            }
+
+            Map<int, pw.TableColumnWidth> customColumnWidths = {
+              0: const pw.FixedColumnWidth(28),  // Kolom No
+              1: const pw.FixedColumnWidth(110), // Kolom Nama Barang
+              2: const pw.FixedColumnWidth(75),  // Kolom Kategori
+              3: const pw.FixedColumnWidth(55),  // Kolom Jumlah Stok
+              4: const pw.FixedColumnWidth(55),  // Kolom Status
+            };
+            
+            for (int i = 5; i < headers.length; i++) {
+              customColumnWidths[i] = const pw.FixedColumnWidth(42);
+            }
+
+            return [
               pw.Table.fromTextArray(
-                headers: ['No', 'Nama Barang', 'Kategori', 'Jumlah Stok', 'Status'],
-                data: List<List<String>>.generate(snapshot.docs.length, (index) {
-                  var data = snapshot.docs[index].data() as Map<String, dynamic>;
-                  return [
-                    '${index + 1}',
-                    data['nama']?.toString() ?? '-',
-                    data['kategori']?.toString() ?? '-',
-                    '${data['jumlah'] ?? 0} Unit',
-                    data['status']?.toString() ?? 'Tersedia',
-                  ];
-                }),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFB71C1C)), // Warna merah Damkar
-                rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5))),
-                cellStyle: const pw.TextStyle(fontSize: 10),
+                headers: headers,
+                data: rows,
+                columnWidths: customColumnWidths,
+                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.white),
+                headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFB71C1C)),
+                cellStyle: const pw.TextStyle(fontSize: 7.5),
                 cellAlignment: pw.Alignment.centerLeft,
-                columnWidths: {
-                  0: const pw.FixedColumnWidth(30),
-                  1: const pw.FlexColumnWidth(3),
-                  2: const pw.FlexColumnWidth(2),
-                  3: const pw.FixedColumnWidth(70),
-                  4: const pw.FixedColumnWidth(70),
-                },
+                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               ),
             ];
           },
-        ),
-      );
-
-      // Buka dialog preview dan cetak PDF
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: 'Laporan_Gudang_Barang.pdf',
-      );
-
-    } catch (e) {
-      if (mounted) _tampilkanDialog('Gagal mencetak laporan: $e');
-    } finally {
-      if (mounted) setState(() => _isImporting = false);
-    }
-  }
-
-  Widget _buildCompactMenuCard({
-    required String title, 
-    required String subtitle, 
-    required IconData icon, 
-    required Color iconColor, 
-    required Color bgColor, 
-    required VoidCallback onTap
-  }) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 10),
-      color: bgColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12), 
-        side: BorderSide(color: iconColor.withOpacity(0.3))
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-          child: Row(
+          footer: (context) => pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10), 
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.15), 
-                  borderRadius: BorderRadius.circular(8)
-                ), 
-                child: Icon(icon, color: iconColor, size: 26)
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, 
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), 
-                    const SizedBox(height: 4), 
-                    Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12))
-                  ]
-                )
-              ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              pw.Text('Dicetak otomatis dari Sistem SIMA Damkar', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+              pw.Text('Halaman ${context.pageNumber} dari ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
             ],
           ),
         ),
-      ),
-    );
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name: 'Laporan_Gudang_Damkar_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mencetak laporan: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _logout(BuildContext context) {
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
   @override
@@ -414,42 +203,180 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Dashboard Admin', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        automaticallyImplyLeading: false,
+        title: const Text('Dashboard Admin'),
         centerTitle: true,
         backgroundColor: Colors.red[800],
         foregroundColor: Colors.white,
-        elevation: 2,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle), 
-            tooltip: 'Profil', 
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminProfileScreen()))
+          // TOMBOL PROFIL ADMIN DENGAN FOTO DINAMIS
+          GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AdminProfileScreen()),
+              );
+              _ambilDataProfilAdmin(); 
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.white24,
+                backgroundImage: _getAvatarImage(),
+                child: _getAvatarImage() == null ? const Icon(Icons.account_circle, color: Colors.white) : null,
+              ),
+            ),
           ),
+          // TOMBOL LOGOUT
           IconButton(
-            icon: const Icon(Icons.logout), 
-            tooltip: 'Keluar', 
-            onPressed: () => _logout(context)
+            icon: const Icon(Icons.logout),
+            tooltip: 'Keluar Akun',
+            onPressed: () => _logout(context),
           ),
         ],
       ),
-      body: _isImporting 
-        ? const Center(child: CircularProgressIndicator(color: Colors.red))
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                _buildCompactMenuCard(title: 'Import File CSV', subtitle: 'Impor master data Damkar', icon: Icons.file_upload, iconColor: Colors.green, bgColor: const Color(0xFFF0FFF0), onTap: _importDataToFirestore),
-                _buildCompactMenuCard(title: 'Cetak Laporan Gudang', subtitle: 'Print / Export PDF seluruh barang', icon: Icons.print, iconColor: Colors.purple, bgColor: const Color(0xFFF9F0FF), onTap: _cetakSemuaBarang),
-                _buildCompactMenuCard(title: 'Tambah Barang', subtitle: 'Input manual', icon: Icons.add_box, iconColor: Colors.redAccent, bgColor: const Color(0xFFFCF5F5), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TambahBarangScreen()))),
-                _buildCompactMenuCard(title: 'Gudang Barang', subtitle: 'Lihat data stok', icon: Icons.warehouse, iconColor: Colors.blueAccent, bgColor: const Color(0xFFF0F5FF), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GudangBarangScreen()))),
-                _buildCompactMenuCard(title: 'Riwayat Transaksi', subtitle: 'Log aktivitas', icon: Icons.history, iconColor: Colors.green, bgColor: const Color(0xFFF4FAF4), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiwayatAdminScreen()))),
-                _buildCompactMenuCard(title: 'Permintaan UPT', subtitle: 'Kelola pengajuan UPT', icon: Icons.assignment, iconColor: Colors.redAccent, bgColor: const Color(0xFFFFF5F5), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PermintaanUptScreen()))),
-                _buildCompactMenuCard(title: 'Permintaan Pos', subtitle: 'Kelola pengajuan Pos', icon: Icons.assignment_turned_in, iconColor: Colors.orange, bgColor: const Color(0xFFFFF8F0), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PermintaanPosScreen()))),
-                _buildCompactMenuCard(title: 'Kerusakan Sedang', subtitle: 'Data kerusakan sedang', icon: Icons.warning, iconColor: Colors.amber, bgColor: const Color(0xFFFFFDF0), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KerusakanSedangScreen()))),
-                _buildCompactMenuCard(title: 'Kerusakan Berat', subtitle: 'Data kerusakan berat', icon: Icons.dangerous, iconColor: Colors.deepOrange, bgColor: const Color(0xFFFFF3F0), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KerusakanBeratScreen()))),
-              ],
+      body: ListView(
+        padding: const EdgeInsets.all(16.0),
+        children: [
+          Card(
+            elevation: 1,
+            color: const Color(0xFFFAF0FF),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: _cetakPdfDariDashboard,
+              leading: CircleAvatar(backgroundColor: Colors.purple.withOpacity(0.2), child: const Icon(Icons.print, color: Colors.purple)),
+              title: const Text('Cetak Laporan Gudang', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Print / Export PDF seluruh barang', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
             ),
           ),
+          const SizedBox(height: 10),
+
+          Card(
+            elevation: 1,
+            color: const Color(0xFFFCF5F5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TambahBarangScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.red.withOpacity(0.2), child: const Icon(Icons.add, color: Colors.redAccent)),
+              title: const Text('Tambah Barang', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Input manual', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Card(
+            elevation: 1,
+            color: const Color(0xFFF0F5FF),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GudangBarangScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.blue.withOpacity(0.2), child: const Icon(Icons.home, color: Colors.blueAccent)),
+              title: const Text('Gudang Barang', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Lihat data stok', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Card(
+            elevation: 1,
+            color: const Color(0xFFF0FFF0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RiwayatAdminScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.green.withOpacity(0.2), child: const Icon(Icons.history, color: Colors.green)),
+              title: const Text('Riwayat Transaksi', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Log aktivitas', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Card(
+            elevation: 1,
+            color: const Color(0xFFFCF5F5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PermintaanUptScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.red.withOpacity(0.2), child: const Icon(Icons.assignment, color: Colors.redAccent)),
+              title: const Text('Permintaan UPT', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Kelola pengajuan UPT', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Card(
+            elevation: 1,
+            color: const Color(0xFFFFF9F0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PermintaanPosScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.orange.withOpacity(0.2), child: const Icon(Icons.check_box, color: Colors.orange)),
+              title: const Text('Permintaan Pos', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Kelola pengajuan Pos', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // MENU KERUSAKAN SEDANG
+          Card(
+            elevation: 1,
+            color: const Color(0xFFFFFDE7),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const KerusakanSedangScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.amber.withOpacity(0.2), child: const Icon(Icons.warning_amber, color: Colors.amber)),
+              title: const Text('Kerusakan Sedang', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Kelola laporan kerusakan sedang', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // MENU KERUSAKAN BERAT
+          Card(
+            elevation: 1,
+            color: const Color(0xFFFFEBEE),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const KerusakanBeratScreen())),
+              leading: CircleAvatar(backgroundColor: Colors.redAccent.withOpacity(0.2), child: const Icon(Icons.error_outline, color: Colors.redAccent)),
+              title: const Text('Kerusakan Berat', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Kelola laporan kerusakan berat', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

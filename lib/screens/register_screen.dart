@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -27,6 +27,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
       source: ImageSource.gallery,
+      maxWidth: 400,
+      maxHeight: 400,
       imageQuality: 50,
     );
     if (image != null) {
@@ -92,22 +94,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       
       String uid = userCredential.user!.uid;
-      String downloadUrl = '';
+      String imageBase64 = '';
 
-      // 2. Jika user memilih foto, unggah ke Firebase Storage
+      // 2. Jika user memilih foto, konversi ke Base64
       if (_imageFile != null) {
-        Reference ref = FirebaseStorage.instance.ref().child('profile_pictures/$uid.jpg');
-        UploadTask uploadTask = ref.putFile(_imageFile!);
-        TaskSnapshot snapshot = await uploadTask;
-        downloadUrl = await snapshot.ref.getDownloadURL();
+        List<int> imageBytes = await _imageFile!.readAsBytes();
+        imageBase64 = base64Encode(imageBytes);
       }
 
-      // 3. Simpan data user ke Cloud Firestore termasuk photoUrl
+      // 3. Simpan data user ke Cloud Firestore termasuk photoUrl sebagai Base64
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'nama': _namaController.text.trim(),
         'email': _emailController.text.trim(),
         'role': _roleTerpilih,
-        'photoUrl': downloadUrl,
+        'photoUrl': imageBase64,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -123,8 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       
       _tampilkanDialog(pesan);
     } on FirebaseException catch (e) {
-      // Menangkap error khusus Storage atau Firestore
-      _tampilkanDialog('Database/Storage Error: ${e.message}');
+      _tampilkanDialog('Database Error: ${e.message}');
     } catch (e) {
       _tampilkanDialog('Error: $e');
     } finally {

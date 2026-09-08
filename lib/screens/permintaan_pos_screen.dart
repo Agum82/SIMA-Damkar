@@ -49,11 +49,9 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     );
   }
 
-  // FUNGSI UTAMA: Mengatur Status & Sinkronisasi Stok Gudang Secara Presisi
   Future<void> _updateStatusPermintaan(String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
     try {
       if (statusBaru == 'Disetujui') {
-        // Cari barang di gudang berdasarkan nama (menggunakan field 'nama')
         var gudangQuery = await FirebaseFirestore.instance
             .collection('gudang_barang')
             .where('nama', isEqualTo: namaBarangDiminta)
@@ -64,13 +62,11 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
           int stokSekarang = gudangDoc.data()['jumlah'] ?? 0;
 
           if (stokSekarang <= jumlahDiminta) {
-            // Jika stok gudang habis atau pas dengan jumlah yang diminta, hapus dokumen barang dari gudang
             await FirebaseFirestore.instance
                 .collection('gudang_barang')
                 .doc(gudangDoc.id)
                 .delete();
           } else {
-            // Jika stok masih bersisa, kurangi jumlah stoknya
             int stokBaru = stokSekarang - jumlahDiminta;
             await FirebaseFirestore.instance
                 .collection('gudang_barang')
@@ -80,7 +76,6 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
         }
       }
 
-      // Perbarui status laporan permintaan pos
       await FirebaseFirestore.instance
           .collection('laporan_kerusakan')
           .doc(docId)
@@ -205,6 +200,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // Tanpa orderBy di kueri agar terhindar dari error Index Firestore
         stream: FirebaseFirestore.instance
             .collection('laporan_kerusakan')
             .where('status', isEqualTo: 'Menunggu')
@@ -229,6 +225,14 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
             
             return tingkatKerusakan == 'Pengajuan Baru' && namaPelanggan.contains('pos');
           }).toList();
+
+          // Mengurutkan data secara otomatis di Dart (Terbaru di Atas)
+          daftarPermintaanPos.sort((a, b) {
+            Timestamp? tA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            Timestamp? tB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            if (tA == null || tB == null) return 0;
+            return tB.compareTo(tA); // Descending (terbaru di atas)
+          });
 
           if (daftarPermintaanPos.isEmpty) {
             return _buildEmptyState();

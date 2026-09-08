@@ -49,7 +49,6 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
     );
   }
 
-  // FUNGSI UTAMA: Sinkronisasi Stok Gudang Secara Presisi untuk UPT
   Future<void> _updateStatusPermintaan(
       String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
     try {
@@ -64,13 +63,11 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
           int stokSekarang = gudangDoc.data()['jumlah'] ?? 0;
 
           if (stokSekarang <= jumlahDiminta) {
-            // Jika stok habis atau pas dengan jumlah yang diminta, hapus dokumen barang dari gudang
             await FirebaseFirestore.instance
                 .collection('gudang_barang')
                 .doc(gudangDoc.id)
                 .delete();
           } else {
-            // Jika stok masih bersisa, kurangi jumlah stoknya
             int stokBaru = stokSekarang - jumlahDiminta;
             await FirebaseFirestore.instance
                 .collection('gudang_barang')
@@ -204,6 +201,7 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // Tanpa orderBy di kueri agar terhindar dari error Index Firestore
         stream: FirebaseFirestore.instance
             .collection('laporan_kerusakan')
             .where('status', isEqualTo: 'Menunggu')
@@ -228,6 +226,14 @@ class _PermintaanUptScreenState extends State<PermintaanUptScreen> {
 
             return tingkatKerusakan == 'Pengajuan Baru' && !namaPelanggan.contains('pos');
           }).toList();
+
+          // Mengurutkan data secara otomatis di Dart (Terbaru di Atas)
+          daftarPermintaanUPT.sort((a, b) {
+            Timestamp? tA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            Timestamp? tB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            if (tA == null || tB == null) return 0;
+            return tB.compareTo(tA); // Descending (terbaru di atas)
+          });
 
           if (daftarPermintaanUPT.isEmpty) {
             return _buildEmptyState();
