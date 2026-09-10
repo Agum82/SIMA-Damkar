@@ -49,7 +49,8 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
     );
   }
 
-  Future<void> _updateStatusPermintaan(String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta) async {
+  Future<void> _updateStatusPermintaan(
+      String docId, String statusBaru, String namaBarangDiminta, int jumlahDiminta, String namaPelanggan) async {
     try {
       if (statusBaru == 'Disetujui') {
         var gudangQuery = await FirebaseFirestore.instance
@@ -59,20 +60,17 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
 
         if (gudangQuery.docs.isNotEmpty) {
           var gudangDoc = gudangQuery.docs.first;
-          int stokSekarang = gudangDoc.data()['jumlah'] ?? 0;
+          var dataGudang = gudangDoc.data() as Map<String, dynamic>;
+          
+          int jumlahLamaPos = int.tryParse(dataGudang[namaPelanggan]?.toString() ?? '0') ?? 0;
+          int jumlahBaruPos = jumlahLamaPos + jumlahDiminta;
 
-          if (stokSekarang <= jumlahDiminta) {
-            await FirebaseFirestore.instance
-                .collection('gudang_barang')
-                .doc(gudangDoc.id)
-                .delete();
-          } else {
-            int stokBaru = stokSekarang - jumlahDiminta;
-            await FirebaseFirestore.instance
-                .collection('gudang_barang')
-                .doc(gudangDoc.id)
-                .update({'jumlah': stokBaru});
-          }
+          await FirebaseFirestore.instance
+              .collection('gudang_barang')
+              .doc(gudangDoc.id)
+              .update({
+            namaPelanggan: jumlahBaruPos,
+          });
         }
       }
 
@@ -82,7 +80,7 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
           .update({'status': statusBaru});
 
       if (!mounted) return;
-      _tampilkanDialog('Permintaan berhasil ${statusBaru.toLowerCase()}!', isBerhasil: true);
+      _tampilkanDialog('Permintaan berhasil ${statusBaru.toLowerCase()} dan tercatat di detail barang gudang!', isBerhasil: true);
     } catch (e) {
       _tampilkanDialog('Gagal memperbarui status: $e');
     }
@@ -200,7 +198,6 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Tanpa orderBy di kueri agar terhindar dari error Index Firestore
         stream: FirebaseFirestore.instance
             .collection('laporan_kerusakan')
             .where('status', isEqualTo: 'Menunggu')
@@ -226,12 +223,11 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
             return tingkatKerusakan == 'Pengajuan Baru' && namaPelanggan.contains('pos');
           }).toList();
 
-          // Mengurutkan data secara otomatis di Dart (Terbaru di Atas)
           daftarPermintaanPos.sort((a, b) {
             Timestamp? tA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
             Timestamp? tB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
             if (tA == null || tB == null) return 0;
-            return tB.compareTo(tA); // Descending (terbaru di atas)
+            return tB.compareTo(tA);
           });
 
           if (daftarPermintaanPos.isEmpty) {
@@ -320,14 +316,14 @@ class _PermintaanPosScreenState extends State<PermintaanPosScreen> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           OutlinedButton.icon(
-                            onPressed: () => _updateStatusPermintaan(doc.id, 'Ditolak', namaBarang, jumlah),
+                            onPressed: () => _updateStatusPermintaan(doc.id, 'Ditolak', namaBarang, jumlah, namaPelanggan),
                             icon: const Icon(Icons.close, color: Colors.red, size: 18),
                             label: const Text('Tolak', style: TextStyle(color: Colors.red)),
                             style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
                           ),
                           const SizedBox(width: 12),
                           ElevatedButton.icon(
-                            onPressed: () => _updateStatusPermintaan(doc.id, 'Disetujui', namaBarang, jumlah),
+                            onPressed: () => _updateStatusPermintaan(doc.id, 'Disetujui', namaBarang, jumlah, namaPelanggan),
                             icon: const Icon(Icons.check, color: Colors.white, size: 18),
                             label: const Text('Setujui', style: TextStyle(fontWeight: FontWeight.bold)),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),

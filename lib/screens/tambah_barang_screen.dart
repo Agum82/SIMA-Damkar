@@ -13,9 +13,8 @@ class TambahBarangScreen extends StatefulWidget {
 
 class _TambahBarangScreenState extends State<TambahBarangScreen> {
   final TextEditingController _namaController = TextEditingController();
-  final TextEditingController _kategoriController = TextEditingController(); // <-- Diubah menjadi text controller agar bisa diketik bebas
+  final TextEditingController _kategoriController = TextEditingController(); 
   final TextEditingController _jumlahController = TextEditingController();
-  final TextEditingController _hargaController = TextEditingController(); // <-- Kolom baru untuk Harga Satuan
   
   String _imageBase64 = '';
   bool _isLoading = false;
@@ -70,13 +69,12 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
     );
   }
 
-  // Fungsi untuk menyimpan data barang ke Firestore
+  // Fungsi untuk menyimpan data barang ke Firestore (Tanpa Harga)
   Future<void> _simpanDataBarang() async {
     if (_namaController.text.trim().isEmpty || 
         _kategoriController.text.trim().isEmpty || 
-        _jumlahController.text.trim().isEmpty || 
-        _hargaController.text.trim().isEmpty) {
-      _tampilkanDialog('Semua kolom (Nama, Kategori, Jumlah, Harga) harus diisi!');
+        _jumlahController.text.trim().isEmpty) {
+      _tampilkanDialog('Semua kolom (Nama, Kategori, Jumlah) harus diisi!');
       return;
     }
 
@@ -86,20 +84,13 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
       return;
     }
 
-    double? harga = double.tryParse(_hargaController.text.trim().replaceAll(RegExp(r'[^0-9.]'), ''));
-    if (harga == null) {
-      _tampilkanDialog('Harga satuan harus berupa angka yang valid!');
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
       await FirebaseFirestore.instance.collection('gudang_barang').add({
         'nama': _namaController.text.trim(),
-        'kategori': _kategoriController.text.trim(), // Menyimpan kategori teks bebas
+        'kategori': _kategoriController.text.trim(),
         'jumlah': jumlah,
-        'harga': harga, // Menyimpan nilai harga satuan
         'status': 'Baik',
         'imageUrl': _imageBase64,
         'createdAt': FieldValue.serverTimestamp(),
@@ -120,7 +111,7 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // Menghilangkan ikon panah kembali di atas
+        automaticallyImplyLeading: false,
         title: const Text('Tambah Barang Baru'),
         backgroundColor: Colors.red[800],
         foregroundColor: Colors.white,
@@ -196,18 +187,6 @@ class _TambahBarangScreenState extends State<TambahBarangScreen> {
                 labelText: 'Jumlah Stok',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.format_list_numbered),
-              ),
-            ),
-            const SizedBox(height: 15),
-
-            // Input Harga Satuan
-            TextField(
-              controller: _hargaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Harga Satuan (Contoh: 37407000)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.monetization_on),
               ),
             ),
             const SizedBox(height: 30),

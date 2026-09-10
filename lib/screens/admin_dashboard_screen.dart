@@ -67,7 +67,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  // Fungsi Langsung Cetak PDF dari Dashboard Admin
+  // Fungsi Cetak PDF dari Dashboard Admin dengan Perhitungan Sisa Stok Akurat (Tanpa Mengurangi Pengadaan)
   Future<void> _cetakPdfDariDashboard() async {
     showDialog(
       context: context,
@@ -95,13 +95,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       Set<String> dynamicKeys = {};
       List<Map<String, dynamic>> parsedDataList = [];
-      List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'harga', 'status', 'imageUrl', 'createdAt', 'updatedAt', 'detail', 'Merk / Tipe', 'Nomor Kendaraan'];
+      List<String> excludeKeys = ['nama', 'kategori', 'jumlah', 'harga', 'status', 'imageurl', 'createdat', 'updatedat', 'detail', 'merk / tipe', 'nomor kendaraan', 'sisa'];
 
       for (var doc in docs) {
         var data = doc.data() as Map<String, dynamic>;
         parsedDataList.add(data);
         data.forEach((key, value) {
-          if (!excludeKeys.contains(key) && value != null && value.toString().isNotEmpty && value.toString() != '-') {
+          if (!excludeKeys.contains(key.toLowerCase()) && value != null && value.toString().isNotEmpty && value.toString() != '-') {
             dynamicKeys.add(key);
           }
         });
@@ -124,38 +124,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           build: (context) {
             List<String> headers = ['No', 'Nama Barang', 'Kategori', 'Jumlah Stok', 'Status'];
             for (var key in sortedKeys) {
-              headers.add(key);
+              String formattedKey = key[0].toUpperCase() + key.substring(1);
+              headers.add(formattedKey);
             }
+            // Tambahkan Kolom Sisa di Paling Ujung Kanan
+            headers.add('Sisa');
 
             List<List<String>> rows = [];
             for (int i = 0; i < parsedDataList.length; i++) {
               var data = parsedDataList[i];
+              
+              String statusAsli = data['status']?.toString() ?? 'Tersedia';
+              if (statusAsli.toLowerCase() == 'baik') {
+                statusAsli = 'Tersedia';
+              }
+
+              int totalAwal = data['jumlah'] ?? 0;
+              int totalKeluar = 0;
+
               List<String> row = [
                 '${i + 1}',
                 data['nama']?.toString() ?? '-',
                 data['kategori']?.toString() ?? '-',
-                '${data['jumlah'] ?? 0} Unit',
-                data['status']?.toString() ?? 'Tersedia',
+                '$totalAwal Unit',
+                statusAsli,
               ];
 
               for (var key in sortedKeys) {
                 String val = data[key]?.toString() ?? '-';
+                String lowerKey = key.toLowerCase();
+                
+                // PENTING: Jangan kurangi stok jika kolom mengandung kata 'pengadaan'
+                if (val != '-' && val.isNotEmpty && !lowerKey.contains('pengadaan')) {
+                  totalKeluar += int.tryParse(val) ?? 0;
+                }
                 row.add(val);
               }
+
+              int sisaStok = totalAwal - totalKeluar;
+              if (sisaStok < 0) sisaStok = 0;
+
+              // Masukkan nilai Sisa yang akurat ke kolom terakhir
+              row.add('$sisaStok');
               rows.add(row);
             }
 
             Map<int, pw.TableColumnWidth> customColumnWidths = {
-              0: const pw.FixedColumnWidth(28),  // Kolom No
-              1: const pw.FixedColumnWidth(110), // Kolom Nama Barang
-              2: const pw.FixedColumnWidth(75),  // Kolom Kategori
-              3: const pw.FixedColumnWidth(55),  // Kolom Jumlah Stok
-              4: const pw.FixedColumnWidth(55),  // Kolom Status
+              0: const pw.FixedColumnWidth(25),  // Kolom No
+              1: const pw.FixedColumnWidth(100), // Kolom Nama Barang
+              2: const pw.FixedColumnWidth(70),  // Kolom Kategori
+              3: const pw.FixedColumnWidth(50),  // Kolom Jumlah Stok
+              4: const pw.FixedColumnWidth(50),  // Kolom Status
             };
             
-            for (int i = 5; i < headers.length; i++) {
-              customColumnWidths[i] = const pw.FixedColumnWidth(42);
+            for (int i = 5; i < headers.length - 1; i++) {
+              customColumnWidths[i] = const pw.FixedColumnWidth(40);
             }
+            customColumnWidths[headers.length - 1] = const pw.FixedColumnWidth(40);
 
             return [
               pw.Table.fromTextArray(
